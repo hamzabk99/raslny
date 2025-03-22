@@ -1,3 +1,4 @@
+/* styles.css */
 * {
     margin: 0;
     padding: 0;
@@ -8,118 +9,201 @@
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: #f0f2f5;
     min-height: 100vh;
+    padding: 20px;
   }
   
-  /* Chat container */
+  /* Authentication Screen */
+  #auth {
+    text-align: center;
+    max-width: 400px;
+    margin: 50px auto;
+    padding: 40px;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  
+  .google-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 24px;
+    background: #4285f4;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    margin: 20px auto;
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+  
+  .google-btn:hover {
+    transform: translateY(-2px);
+  }
+  
+  .google-btn img {
+    width: 24px;
+    height: 24px;
+  }
+  
+  /* Chat Container */
   #chat {
     max-width: 800px;
-    margin: 20px auto;
-    padding: 24px;
+    margin: 0 auto;
     background: white;
     border-radius: 16px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
   }
   
-  /* Messages area */
+  /* User Header */
+  #userHeader {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+  }
+  
+  #userPhoto {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  #userName {
+    font-weight: 600;
+    color: #1a1a1a;
+  }
+  
+  #signOutBtn {
+    margin-left: auto;
+    padding: 8px 16px;
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  
+  #signOutBtn:hover {
+    opacity: 0.9;
+  }
+  
+  /* Messages Container */
   #messages {
     height: 60vh;
+    padding: 20px;
     overflow-y: auto;
-    padding: 16px;
     display: flex;
     flex-direction: column;
     gap: 15px;
     background: #f8f9fa;
-    border-radius: 12px;
-    margin-bottom: 24px;
   }
   
-  /* Individual message bubbles */
+  /* Message Bubbles */
   .message {
-    max-width: 75%;
-    padding: 14px 18px;
-    border-radius: 20px;
-    position: relative;
-    animation: fadeIn 0.3s ease-in;
+    max-width: 70%;
+    display: flex;
+    gap: 12px;
+    animation: fadeIn 0.3s ease-out;
   }
   
-  /* Your messages (right side) */
+  .message .user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  
+  .message .content {
+    max-width: calc(100% - 44px);
+  }
+  
+  .message .text {
+    padding: 12px 16px;
+    border-radius: 12px;
+    line-height: 1.4;
+    font-size: 15px;
+  }
+  
   .message.you {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+  }
+  
+  .message.you .text {
     background: #007bff;
     color: white;
-    align-self: flex-end;
-    border-bottom-right-radius: 4px;
+    border-bottom-right-radius: 2px;
   }
   
-  /* Others' messages (left side) */
-  .message.others {
-    background: #e9ecef;
-    color: #212529;
-    align-self: flex-start;
-    border-bottom-left-radius: 4px;
-  }
-  
-  /* Message text */
-  .message .text {
-    font-size: 16px;
-    line-height: 1.4;
+  .message.others .text {
+    background: #ffffff;
+    color: #1a1a1a;
+    border-bottom-left-radius: 2px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   }
   
   /* Timestamp */
-  .message .timestamp {
+  .timestamp {
     display: block;
     font-size: 0.75rem;
-    opacity: 0.8;
-    margin-top: 6px;
+    color: #666;
+    margin-top: 4px;
+    padding: 0 8px;
   }
   
   .message.you .timestamp {
+    text-align: right;
     color: rgba(255, 255, 255, 0.8);
   }
   
-  .message.others .timestamp {
-    color: rgba(33, 37, 41, 0.7);
-  }
-  
-  /* Input area */
+  /* Input Area */
   .input-container {
     display: flex;
     gap: 12px;
-    padding-top: 24px;
+    padding: 20px;
     border-top: 1px solid #dee2e6;
   }
   
   input {
     flex: 1;
-    padding: 14px 20px;
+    padding: 12px 18px;
     border: 1px solid #dee2e6;
-    border-radius: 30px;
+    border-radius: 25px;
     font-size: 16px;
-    transition: all 0.3s ease;
+    outline: none;
+    transition: all 0.3s;
   }
   
   input:focus {
-    outline: none;
     border-color: #007bff;
-    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
   }
   
-  button {
-    padding: 14px 28px;
+  button[onclick="sendMessage()"] {
+    padding: 12px 24px;
     background: #007bff;
     color: white;
     border: none;
-    border-radius: 30px;
+    border-radius: 25px;
     cursor: pointer;
     font-weight: 600;
-    transition: all 0.2s ease;
+    transition: all 0.2s;
   }
   
-  button:hover {
+  button[onclick="sendMessage()"]:hover {
     background: #0056b3;
     transform: translateY(-1px);
   }
   
-  /* Animation */
+  /* Animations */
   @keyframes fadeIn {
     from {
       opacity: 0;
@@ -130,49 +214,16 @@
       transform: translateY(0);
     }
   }
-  /* Auth Container */
-#auth {
-    text-align: center;
-    margin: 50px auto;
-    max-width: 400px;
-    padding: 30px;
-    background: white;
-    border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-  }
   
-  .google-btn {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 24px;
-    background: #4285f4;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 16px;
-    margin: 20px auto;
-  }
-  
-  /* User Header */
-  #userHeader {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    padding-bottom: 20px;
-    border-bottom: 1px solid #eee;
-    margin-bottom: 20px;
-  }
-  
-  #userPhoto {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-  }
-  
-  #signOutBtn {
-    margin-left: auto;
-    padding: 8px 16px;
-    background: #dc3545;
+  /* Responsive Design */
+  @media (max-width: 600px) {
+    #chat {
+      border-radius: 0;
+      margin: -20px;
+      height: 100vh;
+    }
+    
+    #messages {
+      height: calc(100vh - 160px);
+    }
   }
