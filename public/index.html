@@ -3,7 +3,7 @@
 <head>
   <title>Chat</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="styles.css?v=3">
+  <link rel="stylesheet" href="styles.css?v=4">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
@@ -34,6 +34,8 @@
       <div id="messages"></div>
       <div class="input-container">
         <input id="messageInput" placeholder="Type a message..." onkeydown="if (event.key === 'Enter') sendMessage()" />
+        <input type="file" id="mediaUpload" accept="image/*,video/*" style="display: none;" onchange="uploadMedia()" />
+        <button class="upload-btn" onclick="document.getElementById('mediaUpload').click()">+</button>
         <button onclick="sendMessage()">Send</button>
       </div>
     </div>
@@ -42,6 +44,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-storage-compat.js"></script>
 
   <script>
     const firebaseConfig = {
@@ -56,6 +59,7 @@
     const app = firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
+    const storage = firebase.storage();
     let currentUser = null;
     let currentReceiver = null;
 
@@ -170,14 +174,34 @@
           const msg = doc.data();
           const isYou = msg.sender === currentUser.uid;
           
-          messagesDiv.innerHTML += `
-            <div class="message ${isYou ? 'you' : 'others'}">
-              ${msg.text}
-              <span class="timestamp">
-                ${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}
-              </span>
-            </div>
-          `;
+          if (msg.type === 'text') {
+            messagesDiv.innerHTML += `
+              <div class="message ${isYou ? 'you' : 'others'}">
+                ${msg.text}
+                <span class="timestamp">
+                  ${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}
+                </span>
+              </div>
+            `;
+          } else if (msg.type === 'image') {
+            messagesDiv.innerHTML += `
+              <div class="message ${isYou ? 'you' : 'others'}">
+                <img src="${msg.url}" alt="Image">
+                <span class="timestamp">
+                  ${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}
+                </span>
+              </div>
+            `;
+          } else if (msg.type === 'video') {
+            messagesDiv.innerHTML += `
+              <div class="message ${isYou ? 'you' : 'others'}">
+                <video controls src="${msg.url}"></video>
+                <span class="timestamp">
+                  ${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}
+                </span>
+              </div>
+            `;
+          }
         });
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
       }, error => {
@@ -204,6 +228,7 @@
       
       db.collection(`chats/${chatId}/messages`).add({
         text: text,
+        type: 'text',
         sender: currentUser.uid,
         receiver: currentReceiver,
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
@@ -214,6 +239,48 @@
         console.error("Error sending message:", error);
         alert("Failed to send message: " + error.message);
       });
+    }
+
+    function uploadMedia() {
+      if (!currentUser || !currentReceiver) {
+        alert("Please select a contact to chat with.");
+        return;
+      }
+
+      const fileInput = document.getElementById('mediaUpload');
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      const chatId = [currentUser.uid, currentReceiver].sort().join('_');
+      const storageRef = storage.ref(`chats/${chatId}/${Date.now()}_${file.name}`);
+      const uploadTask = storageRef.put(file);
+
+      uploadTask.on('state_changed', 
+        (snapshot) => {
+          console.log("Upload progress:", (snapshot.bytesTransferred / snapshot.totalBytes) * 100 + "%");
+        },
+        (error) => {
+          console.error("Upload failed:", error);
+          alert("Failed to upload media: " + error.message);
+        },
+        () => {
+          uploadTask.snapshot.ref.getDownloadURL().then(url => {
+            const type = file.type.startsWith('image/') ? 'image' : 'video';
+            db.collection(`chats/${chatId}/messages`).add({
+              url: url,
+              type: type,
+              sender: currentUser.uid,
+              receiver: currentReceiver,
+              timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            }).then(() => {
+              console.log(`${type} sent successfully`);
+              fileInput.value = ""; // Clear the input
+            }).catch(error => {
+              console.error("Error saving media message:", error);
+            });
+          });
+        }
+      );
     }
   </script>
 </body>
