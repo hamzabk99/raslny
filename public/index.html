@@ -70,12 +70,23 @@
     // Authentication Functions
     function signInWithGoogle() {
       const provider = new firebase.auth.GoogleAuthProvider();
-      auth.signInWithPopup(provider)
-        .catch(error => {
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+        auth.signInWithRedirect(provider);
+      } else {
+        auth.signInWithPopup(provider).catch(error => {
           console.error("Sign-in error:", error);
           alert("Sign-in failed. Please try again.");
         });
+      }
     }
+
+    // Handle mobile redirect
+    auth.getRedirectResult().catch(error => {
+      console.error("Redirect error:", error);
+      alert("Sign-in failed. Please try again.");
+    });
 
     function signOut() {
       auth.signOut()
@@ -90,7 +101,7 @@
         });
     }
 
-    // Auth State Listener
+    // Auth State Management
     auth.onAuthStateChanged(user => {
       const authScreen = document.getElementById('authScreen');
       const chatApp = document.getElementById('chatApp');
@@ -99,12 +110,8 @@
         currentUser = user;
         authScreen.style.display = 'none';
         chatApp.style.display = 'grid';
-        
-        // Update user info
         document.getElementById('userPhoto').src = user.photoURL;
         document.getElementById('userName').textContent = user.displayName;
-        
-        // Initialize user in Firestore
         checkUserExists(user);
         loadUsers();
       } else {
@@ -146,6 +153,8 @@
             `;
           }
         });
+      }, error => {
+        console.error("Users load error:", error);
       });
     }
 
@@ -173,12 +182,14 @@
             <div class="message ${isYou ? 'you' : 'others'}">
               <div class="text">${msg.text}</div>
               <span class="timestamp">
-                ${new Date(msg.timestamp?.toDate()).toLocaleTimeString()}
+                ${new Date(msg.timestamp?.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
           `;
         });
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      }, error => {
+        console.error("Messages load error:", error);
       });
     }
 
@@ -196,6 +207,9 @@
         sender: currentUser.uid,
         receiver: currentReceiver,
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      }).catch(error => {
+        console.error("Message send error:", error);
+        alert("Failed to send message. Please try again.");
       });
 
       input.value = "";
