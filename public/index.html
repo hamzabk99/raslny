@@ -33,18 +33,27 @@
     const app = firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
+    // Add this at the top of your script
+    let user = localStorage.getItem('chatUsername'); // Check if username exists
+
     // Send message
     function sendMessage() {
-      const input = document.getElementById('messageInput');
-      const user = prompt("Enter your name:") || "Anonymous";
-      
-      db.collection("messages").add({
+    const input = document.getElementById('messageInput');
+    
+    // Prompt for username only once
+    if (!user) {
+        user = prompt("شنو اسمك برو:") || "بدون اسم";
+        localStorage.setItem('chatUsername', user); // Save to browser storage
+    }
+
+    if (input.value.trim()) {
+        db.collection("messages").add({
         text: input.value,
         user: user,
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      
-      input.value = "";
+        });
+        input.value = "";
+    }
     }
 
     // Real-time listener
