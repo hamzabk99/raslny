@@ -81,22 +81,38 @@
     }
 
     function initializeMessaging() {
-      messaging.getToken({ vapidKey: "BBCYNtktuyTzNTOAieesCzOBDqpmUlTtnI5AfEepWeOIy9uxfcpUYsqwN90ABjNpORGq7jf4mcVi1LyZYxIp-po" }).then((token) => {
+      console.log("Initializing Firebase Messaging...");
+      messaging.getToken({ 
+        vapidKey: "BBCYNtktuyTzNTOAieesCzOBDqpmUlTtnI5AfEepWeOIy9uxfcpUYsqwN90ABjNpORGq7jf4mcVi1LyZYxIp4-po" 
+      }).then((token) => {
         if (token) {
-          console.log("FCM Token:", token);
+          console.log("FCM Token received:", token);
           saveTokenToFirestore(token);
         } else {
-          console.log("No FCM token available. Request permission?");
+          console.log("No FCM token available. Permission denied or not supported?");
+          requestNotificationPermission();
         }
       }).catch((error) => {
         console.error("Error getting FCM token:", error);
+        requestNotificationPermission();
       });
 
       messaging.onMessage((payload) => {
-        console.log("Message received in foreground:", payload);
+        console.log("Foreground message received:", payload);
         const notifElement = document.getElementById(`notif-${payload.data.sender}`);
         if (notifElement && payload.data.sender !== currentReceiver) {
           notifElement.textContent = payload.notification.body.length > 20 ? payload.notification.body.substring(0, 20) + '...' : payload.notification.body;
+        }
+      });
+    }
+
+    function requestNotificationPermission() {
+      Notification.requestPermission().then(permission => {
+        if (permission === "granted") {
+          console.log("Notification permission granted");
+          initializeMessaging(); // Retry getting token
+        } else {
+          console.log("Notification permission denied");
         }
       });
     }
@@ -106,6 +122,8 @@
       userRef.update({
         fcmToken: token,
         lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+      }).then(() => {
+        console.log("FCM token saved to Firestore");
       }).catch(error => {
         console.error("Error saving FCM token:", error);
       });
@@ -180,6 +198,8 @@
       document.getElementById('userList').classList.remove('active');
       document.getElementById('chatWindow').style.display = 'flex';
       loadMessages();
+      const notifElement = document.getElementById(`notif-${receiverId}`);
+      if (notifElement) notifElement.textContent = '';
     }
 
     function showUserList() {
@@ -214,13 +234,6 @@
               </span>
             </div>
           `;
-          
-          if (!isYou) {
-            const notifElement = document.getElementById(`notif-${msg.sender}`);
-            if (notifElement && msg.sender !== currentReceiver) {
-              notifElement.textContent = msg.text.length > 20 ? msg.text.substring(0, 20) + '...' : msg.text;
-            }
-          }
         });
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
       }, error => {
@@ -264,13 +277,15 @@
     }
 
     function sendNotification(receiverId, senderName, messageText) {
+      console.log("Attempting to send notification to:", receiverId);
       db.collection('users').doc(receiverId).get().then(doc => {
         if (doc.exists && doc.data().fcmToken) {
           const token = doc.data().fcmToken;
+          console.log("Receiver FCM token:", token);
           fetch('https://fcm.googleapis.com/fcm/send', {
             method: 'POST',
             headers: {
-              'Authorization': 'key=BBCYNtktuyTzNTOAieesCzOBDqpmUlTtnI5AfEepWeOIy9uxfcpUYsqwN90ABjNpORGq7jf4mcVi1LyZYxIp-po',
+              'Authorization': 'key=YOUR_SERVER_KEY_HERE',
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
@@ -284,11 +299,19 @@
               }
             })
           }).then(response => {
-            console.log("Notification sent:", response.ok ? "Success" : "Failed");
+            if (response.ok) {
+              console.log("Notification sent successfully");
+            } else {
+              response.text().then(text => console.error("Notification failed:", text));
+            }
           }).catch(error => {
             console.error("Error sending notification:", error);
           });
+        } else {
+          console.log("No FCM token found for receiver:", receiverId);
         }
+      }).catch(error => {
+        console.error("Error fetching receiver data:", error);
       });
     }
 
