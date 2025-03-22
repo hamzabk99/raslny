@@ -1,4 +1,3 @@
-/* styles.css */
 /* Reset and Base Styles */
 * {
     margin: 0;
@@ -228,39 +227,25 @@
   
   /* Animations */
   @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
   }
   
   /* Responsive Design */
   @media (max-width: 768px) {
-    #chatApp {
-      grid-template-columns: 1fr;
-      height: 100vh;
-    }
-  
-    #userList {
-      display: none;
-    }
-  
-    .auth-container {
-      padding: 20px;
-    }
-  
-    .message {
-      max-width: 85%;
-    }
+    #chatApp { grid-template-columns: 1fr; height: 100vh; }
+    #userList { display: none; }
+    .auth-container { padding: 20px; margin: 20px; }
+    .message { max-width: 85%; }
+    #chatHeader { padding: 15px; }
+    .input-container { padding: 15px; }
+    input { padding: 12px 16px; }
+    button[onclick="sendMessage()"] { padding: 12px 20px; }
   }
   
   /* Google Sign-in Button */
   .google-btn {
-    display: inline-flex;
+    display: Leh-inline-flex;
     align-items: center;
     gap: 12px;
     padding: 12px 24px;
@@ -301,27 +286,4 @@
   
   .user-item.online::after {
     display: block;
-  }
-
-  @media (max-width: 768px) {
-    .auth-container {
-      margin: 20px;
-      padding: 20px;
-    }
-  
-    #chatHeader {
-      padding: 15px;
-    }
-  
-    .input-container {
-      padding: 15px;
-    }
-  
-    input {
-      padding: 12px 16px;
-    }
-  
-    button[onclick="sendMessage()"] {
-      padding: 12px 20px;
-    }
   }

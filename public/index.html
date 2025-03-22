@@ -6,7 +6,6 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- Authentication Screen -->
   <div id="authScreen">
     <div class="auth-container">
       <h1>Welcome to Private Chat</h1>
@@ -17,7 +16,6 @@
     </div>
   </div>
 
-  <!-- Chat Application (hidden until signed in) -->
   <div id="chatApp" style="display: none;">
     <div id="userList">
       <div id="userHeader">
@@ -40,13 +38,11 @@
     </div>
   </div>
 
-  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
 
   <script>
-    // Your Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyA3h2VF-GeE_AKjKcsbDF-zw1n1Y9Z_ckA",
       authDomain: "web-chat-eaa23.firebaseapp.com",
@@ -56,30 +52,30 @@
       appId: "1:640664372760:web:8b44f49ac91a4465b1256d"
     };
 
-    // Initialize Firebase
     const app = firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
     let currentUser = null;
     let currentReceiver = null;
 
-    // Sign in with Google
     function signInWithGoogle() {
+      console.log("Sign-in button clicked");
       const provider = new firebase.auth.GoogleAuthProvider();
       return auth.signInWithPopup(provider)
+        .then((result) => {
+          console.log("Sign-in successful:", result.user.uid);
+        })
         .catch(error => {
-          console.error("Sign-in error:", error);
-          alert("Failed to sign in. Please try again.");
+          console.error("Sign-in error:", error.code, error.message);
+          alert("Failed to sign in: " + error.message);
         });
     }
 
-    // Sign out
     function signOut() {
       auth.signOut();
       window.location.reload();
     }
 
-    // Handle auth state changes
     auth.onAuthStateChanged(user => {
       const authScreen = document.getElementById('authScreen');
       const chatApp = document.getElementById('chatApp');
@@ -90,7 +86,7 @@
         chatApp.style.display = 'grid';
         document.getElementById('userPhoto').src = user.photoURL || '';
         document.getElementById('userName').textContent = user.displayName || 'User';
-        console.log("Current user:", currentUser.uid); // Debug
+        console.log("Current user signed in:", currentUser.uid);
         checkUserExists(user);
         loadUsers();
       } else {
@@ -100,7 +96,6 @@
       }
     });
 
-    // Check/Create user in Firestore
     function checkUserExists(user) {
       const userRef = db.collection('users').doc(user.uid);
       userRef.get().then(doc => {
@@ -120,7 +115,6 @@
       });
     }
 
-    // Load all users
     function loadUsers() {
       db.collection('users').onSnapshot(snapshot => {
         const usersDiv = document.getElementById('users');
@@ -142,15 +136,13 @@
       });
     }
 
-    // Open chat with selected user
     function openChat(receiverId, receiverName) {
       currentReceiver = receiverId;
       document.getElementById('currentChat').textContent = receiverName;
-      console.log("Chat opened with:", receiverId); // Debug
+      console.log("Chat opened - Sender:", currentUser.uid, "Receiver:", receiverId);
       loadMessages();
     }
 
-    // Load chat history
     function loadMessages() {
       if (!currentReceiver) {
         console.log("No receiver selected, skipping loadMessages");
@@ -158,7 +150,7 @@
       }
       
       const chatId = [currentUser.uid, currentReceiver].sort().join('_');
-      console.log("Loading messages for chatId:", chatId); // Debug
+      console.log("Loading messages for chatId:", chatId);
       const messagesRef = db.collection(`chats/${chatId}/messages`).orderBy('timestamp');
 
       messagesRef.onSnapshot(snapshot => {
@@ -184,7 +176,6 @@
       });
     }
 
-    // Send message
     function sendMessage() {
       if (!currentUser || !currentReceiver) {
         alert("Please select a contact to chat with.");
@@ -200,7 +191,7 @@
       }
 
       const chatId = [currentUser.uid, currentReceiver].sort().join('_');
-      console.log("Sending message to chatId:", chatId); // Debug
+      console.log("Sending message to chatId:", chatId);
       
       db.collection(`chats/${chatId}/messages`).add({
         text: text,
@@ -209,14 +200,13 @@
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
       }).then(() => {
         console.log("Message sent successfully");
-        input.value = ""; // Clear input only on success
+        input.value = "";
       }).catch(error => {
         console.error("Error sending message:", error);
-        alert("Failed to send message. Check console for details.");
+        alert("Failed to send message: " + error.message);
       });
     }
 
-    // Initialize (no automatic sign-in here, relying on button)
     (function init() {
       console.log("App initialized, waiting for auth state");
     })();
