@@ -125,7 +125,7 @@
     display: flex;
     align-items: center;
     padding: 12px 15px;
-    background: #000;
+    background: #000; /* No border or box */
     cursor: pointer;
     transition: background 0.2s;
   }
@@ -144,9 +144,9 @@
   .user-item span {
     font-size: 16px;
     color: #fff;
-    white-space: nowrap;
+    white-space: nowrap; /* Prevent wrapping */
     overflow: hidden;
-    text-overflow: ellipsis;
+    text-overflow: ellipsis; /* Add ellipsis for long names */
     flex-grow: 1;
   }
   
@@ -218,7 +218,6 @@
   .message img, .message video {
     max-width: 100%;
     border-radius: 12px;
-    border-radius: 12px;
     margin-top: 5px;
   }
   
@@ -229,11 +228,11 @@
   }
   
   .message.you .timestamp {
-    color: #e6f0fa;
+    color: #e6f0fa; /* Light blue-gray for visibility on blue */
   }
   
   .message.others .timestamp {
-    color: #888;
+    color: #888; /* Keep muted gray for others */
   }
   
   .input-container {
@@ -275,12 +274,6 @@
   
   .upload-btn:hover {
     background: #555;
-  }
-  
-  .upload-btn:disabled {
-    background: #333;
-    cursor: not-allowed;
-    opacity: 0.6;
   }
   
   button[onclick="sendMessage()"] {

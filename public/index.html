@@ -3,7 +3,7 @@
 <head>
   <title>Chat</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="styles.css?v=5">
+  <link rel="stylesheet" href="styles.css?v=6">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
@@ -34,8 +34,6 @@
       <div id="messages"></div>
       <div class="input-container">
         <input id="messageInput" placeholder="Type a message..." onkeydown="if (event.key === 'Enter') sendMessage()" />
-        <input type="file" id="mediaUpload" accept="image/*,video/*" style="display: none;" onchange="uploadMedia()" />
-        <button id="uploadBtn" class="upload-btn" onclick="document.getElementById('mediaUpload').click()" disabled>+</button>
         <button onclick="sendMessage()">Send</button>
       </div>
     </div>
@@ -44,7 +42,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-storage-compat.js"></script>
 
   <script>
     const firebaseConfig = {
@@ -59,9 +56,23 @@
     const app = firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
-    const storage = firebase.storage();
     let currentUser = null;
     let currentReceiver = null;
+
+    // Request notification permission on load
+    function requestNotificationPermission() {
+      if ("Notification" in window) {
+        Notification.requestPermission().then(permission => {
+          if (permission === "granted") {
+            console.log("Notification permission granted");
+          } else {
+            console.log("Notification permission denied");
+          }
+        });
+      } else {
+        console.log("Notifications not supported in this browser");
+      }
+    }
 
     function signInWithGoogle() {
       console.log("Sign-in button clicked");
@@ -94,6 +105,7 @@
         console.log("Current user signed in:", currentUser.uid);
         checkUserExists(user);
         loadUsers();
+        requestNotificationPermission(); // Ask for permission after sign-in
       } else {
         console.log("No user signed in, showing auth screen");
         authScreen.style.display = 'flex';
@@ -147,14 +159,12 @@
       console.log("Chat opened - Sender:", currentUser.uid, "Receiver:", receiverId);
       document.getElementById('userList').classList.remove('active');
       document.getElementById('chatWindow').style.display = 'flex';
-      document.getElementById('uploadBtn').disabled = false; // Enable upload button
       loadMessages();
     }
 
     function showUserList() {
       document.getElementById('userList').classList.add('active');
       document.getElementById('chatWindow').style.display = 'none';
-      document.getElementById('uploadBtn').disabled = true; // Disable upload button
       currentReceiver = null;
     }
 
@@ -170,42 +180,34 @@
 
       messagesRef.onSnapshot(snapshot => {
         const messagesDiv = document.getElementById('messages');
-        messagesDiv.innerHTML = '';
+        let isFirstLoad = messagesDiv.innerHTML === ''; // Detect initial load
         
         snapshot.forEach(doc => {
           const msg = doc.data();
           const isYou = msg.sender === currentUser.uid;
           
-          if (msg.type === 'text') {
+          // Skip rendering if message already exists (prevent duplicates)
+          if (!document.getElementById(doc.id)) {
             messagesDiv.innerHTML += `
-              <div class="message ${isYou ? 'you' : 'others'}">
+              <div id="${doc.id}" class="message ${isYou ? 'you' : 'others'}">
                 ${msg.text}
                 <span class="timestamp">
                   ${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}
                 </span>
               </div>
             `;
-          } else if (msg.type === 'image') {
-            messagesDiv.innerHTML += `
-              <div class="message ${isYou ? 'you' : 'others'}">
-                <img src="${msg.url}" alt="Image">
-                <span class="timestamp">
-                  ${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}
-                </span>
-              </div>
-            `;
-          } else if (msg.type === 'video') {
-            messagesDiv.innerHTML += `
-              <div class="message ${isYou ? 'you' : 'others'}">
-                <video controls src="${msg.url}"></video>
-                <span class="timestamp">
-                  ${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}
-                </span>
-              </div>
-            `;
+            
+            // Show notification for new messages from others (not on initial load)
+            if (!isYou && !isFirstLoad && Notification.permission === "granted") {
+              new Notification(`${document.getElementById('currentChat').textContent}`, {
+                body: msg.text,
+                icon: 'https://www.google.com/favicon.ico' // Optional: use a chat icon
+              });
+            }
           }
         });
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        isFirstLoad = false; // Reset after first load
       }, error => {
         console.error("Error loading messages:", error);
       });
@@ -243,52 +245,8 @@
       });
     }
 
-    function uploadMedia() {
-      if (!currentUser || !currentReceiver) {
-        alert("Please select a contact to chat with.");
-        console.log("Upload failed: No receiver selected");
-        return;
-      }
-
-      const fileInput = document.getElementById('mediaUpload');
-      const file = fileInput.files[0];
-      if (!file) {
-        console.log("No file selected");
-        return;
-      }
-
-      const chatId = [currentUser.uid, currentReceiver].sort().join('_');
-      const storageRef = storage.ref(`chats/${chatId}/${Date.now()}_${file.name}`);
-      const uploadTask = storageRef.put(file);
-
-      uploadTask.on('state_changed', 
-        (snapshot) => {
-          console.log("Upload progress:", (snapshot.bytesTransferred / snapshot.totalBytes) * 100 + "%");
-        },
-        (error) => {
-          console.error("Upload failed:", error);
-          alert("Failed to upload media: " + error.message);
-        },
-        () => {
-          uploadTask.snapshot.ref.getDownloadURL().then(url => {
-            const type = file.type.startsWith('image/') ? 'image' : 'video';
-            db.collection(`chats/${chatId}/messages`).add({
-              url: url,
-              type: type,
-              sender: currentUser.uid,
-              receiver: currentReceiver,
-              timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            }).then(() => {
-              console.log(`${type} sent successfully`);
-              fileInput.value = ""; // Clear the input
-            }).catch(error => {
-              console.error("Error saving media message:", error);
-              alert("Failed to save media message: " + error.message);
-            });
-          });
-        }
-      );
-    }
+    // Initialize app
+    console.log("App initialized");
   </script>
 </body>
 </html>
