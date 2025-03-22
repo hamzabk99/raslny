@@ -127,7 +127,7 @@
     padding: 12px 15px;
     background: #000;
     cursor: pointer;
-    border-bottom: 1px solid #333; /* Line between names */
+    border-bottom: 1px solid #333;
   }
   
   .user-item:hover {
@@ -154,7 +154,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 100px; /* Limit width to avoid overflow */
+    max-width: 100px;
   }
   
   /* Chat Window */
@@ -193,7 +193,7 @@
   #messages {
     flex: 1;
     overflow-y: auto;
-    padding: 15px 15px 60px 15px; /* Extra bottom padding for input bar */
+    padding: 15px 15px 60px 15px;
     background: #000;
     display: flex;
     flex-direction: column;
@@ -229,11 +229,11 @@
   }
   
   .message.you .timestamp {
-    color: #e6f0fa; /* Light blue-gray for visibility on blue */
+    color: #e6f0fa;
   }
   
   .message.others .timestamp {
-    color: #888; /* Muted gray for others */
+    color: #888;
   }
   
   .input-container {
