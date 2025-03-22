@@ -6,10 +6,12 @@
   }
   
   body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: #f0f2f5;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+    background: #000; /* Dark background */
     height: 100vh;
-    overflow: hidden; /* Prevent scrolling on body */
+    overflow: hidden;
+    font-size: 16px;
+    color: #fff; /* Default text color */
   }
   
   /* Authentication Screen */
@@ -18,385 +20,242 @@
     justify-content: center;
     align-items: center;
     height: 100vh;
-    background: #f8f9fa;
+    background: #000;
   }
   
   .auth-container {
-    background: white;
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     text-align: center;
     width: 100%;
-    max-width: 360px;
-    margin: 10px;
+    max-width: 320px;
+    padding: 20px;
   }
   
   .auth-container h1 {
+    font-size: 24px;
+    color: #fff; /* White title */
     margin-bottom: 20px;
-    color: #1a1a1a;
-    font-size: 20px;
   }
   
-  /* Chat Application Layout - Mobile First */
+  .google-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px;
+    background: #1a73e8; /* Keep Google blue */
+    color: white;
+    border: none;
+    border-radius: 24px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  
+  .google-btn:hover {
+    background: #1557b0;
+  }
+  
+  .google-btn img {
+    width: 20px;
+    height: 20px;
+  }
+  
+  /* Chat App Layout */
   #chatApp {
     display: flex;
     flex-direction: column;
     height: 100vh;
-    background: white;
   }
   
-  /* User List Sidebar */
+  /* User List (Contacts) */
   #userList {
-    flex: 1;
-    overflow-y: auto;
-    display: none; /* Hidden by default on mobile */
+    display: none; /* Hidden by default */
+    flex-direction: column;
+    height: 100%;
   }
   
   #userList.active {
-    display: block; /* Show when active */
+    display: flex; /* Show when active */
   }
   
   #userHeader {
     display: flex;
     align-items: center;
-    padding: 15px;
-    gap: 10px;
-    border-bottom: 1px solid #e9ecef;
-    background: white;
+    padding: 10px 15px;
+    border-bottom: 1px solid #333; /* Dark border */
+    background: #1a1a1a; /* Dark header */
     position: sticky;
     top: 0;
     z-index: 1;
   }
   
   #userPhoto {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
-    border: 2px solid #fff;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    margin-right: 10px;
   }
   
   #userName {
-    font-weight: 600;
-    color: #1a1a1a;
-    flex-grow: 1;
     font-size: 16px;
+    font-weight: bold;
+    color: #fff; /* White name */
+    flex-grow: 1;
   }
   
   #signOutBtn {
     padding: 6px 12px;
-    background: #dc3545;
+    background: #ff0000; /* Keep red for sign-out */
     color: white;
     border: none;
-    border-radius: 6px;
-    cursor: pointer;
+    border-radius: 16px;
     font-size: 14px;
-    transition: opacity 0.2s;
-  }
-  
-  #signOutBtn:hover {
-    opacity: 0.9;
+    cursor: pointer;
   }
   
   #users {
-    padding: 10px;
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 0;
+    background: #000; /* Dark background */
   }
   
   .user-item {
     display: flex;
     align-items: center;
-    gap: 10px;
-    width: 100%;
-    padding: 12px;
-    margin: 4px 0;
-    background: transparent;
-    border: none;
-    border-radius: 8px;
+    padding: 12px 15px;
+    border-bottom: 1px solid #333; /* Dark border */
+    background: #000;
     cursor: pointer;
     transition: background 0.2s;
-    font-size: 16px;
   }
   
   .user-item:hover {
-    background: #f8f9fa;
+    background: #1a1a1a; /* Slightly lighter on hover */
   }
   
   .user-item img {
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
+    margin-right: 10px;
+  }
+  
+  .user-item span {
+    font-size: 16px;
+    color: #fff; /* White text */
   }
   
   /* Chat Window */
   #chatWindow {
-    flex: 1;
     display: flex;
     flex-direction: column;
-    height: 100vh; /* Full height on mobile */
+    height: 100vh;
   }
   
   #chatHeader {
-    padding: 15px;
-    border-bottom: 1px solid #e9ecef;
-    font-weight: 600;
-    color: #1a1a1a;
-    background: #f8f9fa;
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    background: #1a1a1a; /* Dark header */
+    border-bottom: 1px solid #333;
     position: sticky;
     top: 0;
     z-index: 1;
-    display: flex;
-    align-items: center;
-    gap: 10px;
   }
   
   #chatHeader .back-btn {
     background: none;
     border: none;
-    font-size: 18px;
+    font-size: 20px;
+    color: #fff; /* White arrow */
     cursor: pointer;
-    padding: 5px;
+    margin-right: 10px;
   }
   
   #currentChat {
-    flex-grow: 1;
     font-size: 16px;
+    font-weight: bold;
+    color: #fff; /* White name */
   }
   
   #messages {
     flex: 1;
-    padding: 15px;
     overflow-y: auto;
+    padding: 15px;
+    background: #000; /* Dark background */
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    background: #f8f9fa;
   }
   
   .message {
-    max-width: 80%;
+    max-width: 85%;
     padding: 10px 14px;
-    border-radius: 12px;
-    font-size: 14px;
-    animation: fadeIn 0.3s ease-out;
+    margin-bottom: 8px;
+    border-radius: 18px;
+    font-size: 15px;
+    line-height: 1.4;
   }
   
   .message.you {
-    background: #007bff;
+    background: #1d9bf0; /* Blue for your messages */
     color: white;
     align-self: flex-end;
     border-bottom-right-radius: 4px;
   }
   
   .message.others {
-    background: white;
-    color: #1a1a1a;
+    background: #333; /* Dark gray for others */
+    color: #fff; /* White text */
     align-self: flex-start;
     border-bottom-left-radius: 4px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   }
   
   .timestamp {
     display: block;
-    font-size: 0.7rem;
-    margin-top: 4px;
-    opacity: 0.8;
-  }
-  
-  .message.you .timestamp {
-    color: rgba(255, 255, 255, 0.8);
-  }
-  
-  .message.others .timestamp {
-    color: rgba(0, 0, 0, 0.6);
+    font-size: 12px;
+    color: #888; /* Muted gray for timestamps */
+    margin-top: 2px;
   }
   
   .input-container {
-    padding: 15px;
-    border-top: 1px solid #e9ecef;
     display: flex;
-    gap: 10px;
-    background: white;
+    align-items: center;
+    padding: 10px 15px;
+    background: #1a1a1a; /* Dark input bar */
+    border-top: 1px solid #333;
     position: sticky;
     bottom: 0;
   }
   
-  input {
+  #messageInput {
     flex: 1;
-    padding: 12px 16px;
-    border: 1px solid #dee2e6;
+    padding: 10px 15px;
+    border: 1px solid #444; /* Slightly lighter border */
     border-radius: 20px;
-    font-size: 14px;
+    font-size: 15px;
     outline: none;
-    transition: all 0.3s;
+    margin-right: 10px;
+    background: #222; /* Dark input background */
+    color: #fff; /* White text */
   }
   
-  input:focus {
-    border-color: #007bff;
-    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.15);
+  #messageInput:focus {
+    border-color: #1d9bf0; /* Blue focus */
   }
   
   button[onclick="sendMessage()"] {
-    padding: 12px 20px;
-    background: #007bff;
+    padding: 10px 20px;
+    background: #1d9bf0; /* Blue send button */
     color: white;
     border: none;
     border-radius: 20px;
+    font-size: 15px;
     cursor: pointer;
-    font-weight: 600;
-    font-size: 14px;
-    transition: all 0.2s;
+    transition: background 0.2s;
   }
   
   button[onclick="sendMessage()"]:hover {
-    background: #0056b3;
-    transform: translateY(-1px);
-  }
-  
-  /* Animations */
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  
-  /* Google Sign-in Button */
-  .google-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 20px;
-    background: #4285f4;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 16px;
-    cursor: pointer;
-    transition: transform 0.2s;
-  }
-  
-  .google-btn:hover {
-    transform: translateY(-2px);
-  }
-  
-  .google-btn img {
-    width: 24px;
-    height: 24px;
-  }
-  
-  /* Online Status Indicator */
-  .user-item {
-    position: relative;
-  }
-  
-  .user-item::after {
-    content: '';
-    position: absolute;
-    right: 10px;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #28a745;
-    border: 2px solid white;
-    display: none;
-  }
-  
-  .user-item.online::after {
-    display: block;
-  }
-  
-  /* Desktop Layout */
-  @media (min-width: 769px) {
-    #chatApp {
-      flex-direction: row;
-    }
-  
-    #userList {
-      display: block;
-      width: 300px;
-      flex: none;
-    }
-  
-    #chatWindow {
-      flex: 1;
-      height: auto;
-    }
-  
-    #chatHeader .back-btn {
-      display: none; /* Hide back button on desktop */
-    }
-  
-    .auth-container {
-      padding: 40px;
-      max-width: 400px;
-    }
-  
-    #userHeader {
-      padding: 20px;
-    }
-  
-    #userPhoto {
-      width: 40px;
-      height: 40px;
-    }
-  
-    #userName {
-      font-size: 18px;
-    }
-  
-    #signOutBtn {
-      padding: 8px 16px;
-      font-size: 16px;
-    }
-  
-    .user-item {
-      padding: 12px;
-      margin: 6px 0;
-      font-size: 16px;
-    }
-  
-    .user-item img {
-      width: 40px;
-      height: 40px;
-    }
-  
-    #chatHeader {
-      padding: 20px;
-    }
-  
-    #currentChat {
-      font-size: 18px;
-    }
-  
-    #messages {
-      padding: 20px;
-      gap: 15px;
-    }
-  
-    .message {
-      max-width: 70%;
-      padding: 12px 16px;
-      font-size: 16px;
-    }
-  
-    .timestamp {
-      font-size: 0.75rem;
-      margin-top: 6px;
-    }
-  
-    .input-container {
-      padding: 20px;
-      gap: 12px;
-    }
-  
-    input {
-      padding: 14px 20px;
-      font-size: 16px;
-      border-radius: 25px;
-    }
-  
-    button[onclick="sendMessage()"] {
-      padding: 14px 28px;
-      font-size: 16px;
-      border-radius: 25px;
-    }
+    background: #1a91da;
   }

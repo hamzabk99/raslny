@@ -1,21 +1,22 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Private Chat</title>
+  <title>Chat</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="styles.css?v=2">
+  <link rel="stylesheet" href="styles.css?v=3">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
   <div id="authScreen">
     <div class="auth-container">
-      <h1>Welcome to Private Chat</h1>
+      <h1>Chat</h1>
       <button class="google-btn" onclick="signInWithGoogle()">
         <img src="https://www.google.com/favicon.ico" alt="Google Icon">
         Sign in with Google
       </button>
     </div>
   </div>
-    <!--hi baby-->
+
   <div id="chatApp" style="display: none;">
     <div id="userList">
       <div id="userHeader">
@@ -23,17 +24,16 @@
         <span id="userName"></span>
         <button onclick="signOut()" id="signOutBtn">Sign Out</button>
       </div>
-      <h3>Contacts</h3>
       <div id="users"></div>
     </div>
     <div id="chatWindow">
       <div id="chatHeader">
-        <button class="back-btn" onclick="showUserList()">⬅</button>
-        <span id="currentChat">Select a contact to chat</span>
+        <button class="back-btn" onclick="showUserList()">←</button>
+        <span id="currentChat">Select a contact</span>
       </div>
       <div id="messages"></div>
       <div class="input-container">
-        <input id="messageInput" placeholder="Type a message..." />
+        <input id="messageInput" placeholder="Type a message..." onkeydown="if (event.key === 'Enter') sendMessage()" />
         <button onclick="sendMessage()">Send</button>
       </div>
     </div>
@@ -126,8 +126,8 @@
           if (user.uid !== currentUser.uid) {
             usersDiv.innerHTML += `
               <button class="user-item" onclick="openChat('${user.uid}', '${user.displayName}')">
-                <img src="${user.photoURL}" class="user-avatar" onerror="this.src='data:,'">
-                ${user.displayName}
+                <img src="${user.photoURL}" onerror="this.src='data:,'">
+                <span>${user.displayName}</span>
               </button>
             `;
           }
@@ -149,7 +149,7 @@
     function showUserList() {
       document.getElementById('userList').classList.add('active');
       document.getElementById('chatWindow').style.display = 'none';
-      currentReceiver = null; // Reset chat
+      currentReceiver = null;
     }
 
     function loadMessages() {
@@ -172,9 +172,9 @@
           
           messagesDiv.innerHTML += `
             <div class="message ${isYou ? 'you' : 'others'}">
-              <div class="text">${msg.text}</div>
+              ${msg.text}
               <span class="timestamp">
-                ${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString() : 'Sending...'}
+                ${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}
               </span>
             </div>
           `;
@@ -215,11 +215,6 @@
         alert("Failed to send message: " + error.message);
       });
     }
-
-    (function init() {
-      console.log("App initialized, waiting for auth state");
-      console.log("Body background color:", window.getComputedStyle(document.body).backgroundColor);
-    })();
   </script>
 </body>
 </html>
