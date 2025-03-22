@@ -1,4 +1,5 @@
 /* styles.css */
+/* Reset and Base Styles */
 * {
     margin: 0;
     padding: 0;
@@ -11,19 +12,41 @@
     height: 100vh;
   }
   
+  /* Authentication Screen */
+  #authScreen {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background: #f8f9fa;
+  }
+  
+  .auth-container {
+    background: white;
+    padding: 40px;
+    border-radius: 16px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    max-width: 400px;
+    width: 90%;
+  }
+  
+  .auth-container h1 {
+    margin-bottom: 30px;
+    color: #1a1a1a;
+    font-size: 24px;
+  }
+  
+  /* Chat Application Layout */
   #chatApp {
     display: grid;
     grid-template-columns: 300px 1fr;
     height: 100vh;
-    max-width: 1400px;
-    margin: 0 auto;
-    gap: 1px;
-    background: #ddd;
+    background: white;
   }
   
   /* User List Sidebar */
   #userList {
-    background: #ffffff;
     border-right: 1px solid #e9ecef;
     overflow-y: auto;
   }
@@ -34,6 +57,10 @@
     padding: 20px;
     gap: 15px;
     border-bottom: 1px solid #e9ecef;
+    position: sticky;
+    top: 0;
+    background: white;
+    z-index: 1;
   }
   
   #userPhoto {
@@ -86,7 +113,7 @@
     background: #f8f9fa;
   }
   
-  .user-item .user-avatar {
+  .user-item img {
     width: 40px;
     height: 40px;
     border-radius: 50%;
@@ -94,7 +121,6 @@
   
   /* Chat Window */
   #chatWindow {
-    background: #ffffff;
     display: flex;
     flex-direction: column;
   }
@@ -105,6 +131,9 @@
     font-weight: 600;
     color: #1a1a1a;
     background: #f8f9fa;
+    position: sticky;
+    top: 0;
+    z-index: 1;
   }
   
   #messages {
@@ -114,8 +143,10 @@
     display: flex;
     flex-direction: column;
     gap: 15px;
+    background: #f8f9fa;
   }
   
+  /* Message Bubbles */
   .message {
     max-width: 70%;
     padding: 12px 16px;
@@ -131,10 +162,11 @@
   }
   
   .message.others {
-    background: #e9ecef;
+    background: white;
     color: #1a1a1a;
     align-self: flex-start;
     border-bottom-left-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   }
   
   .timestamp {
@@ -152,12 +184,15 @@
     color: rgba(0, 0, 0, 0.6);
   }
   
+  /* Input Area */
   .input-container {
     padding: 20px;
     border-top: 1px solid #e9ecef;
     display: flex;
     gap: 12px;
-    background: #f8f9fa;
+    background: white;
+    position: sticky;
+    bottom: 0;
   }
   
   input {
@@ -175,7 +210,7 @@
     box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
   }
   
-  button {
+  button[onclick="sendMessage()"] {
     padding: 14px 28px;
     background: #007bff;
     color: white;
@@ -186,11 +221,12 @@
     transition: all 0.2s;
   }
   
-  button:hover {
+  button[onclick="sendMessage()"]:hover {
     background: #0056b3;
     transform: translateY(-1px);
   }
   
+  /* Animations */
   @keyframes fadeIn {
     from {
       opacity: 0;
@@ -213,9 +249,37 @@
       display: none;
     }
   
-    #chatWindow {
-      height: 100vh;
+    .auth-container {
+      padding: 20px;
     }
+  
+    .message {
+      max-width: 85%;
+    }
+  }
+  
+  /* Google Sign-in Button */
+  .google-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 24px;
+    background: #4285f4;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+  
+  .google-btn:hover {
+    transform: translateY(-2px);
+  }
+  
+  .google-btn img {
+    width: 24px;
+    height: 24px;
   }
   
   /* Online Status Indicator */

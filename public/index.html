@@ -6,7 +6,19 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div id="chatApp">
+  <!-- Authentication Screen -->
+  <div id="authScreen">
+    <div class="auth-container">
+      <h1>Welcome to Chat</h1>
+      <button onclick="signInWithGoogle()" class="google-btn">
+        <img src="https://img.icons8.com/color/48/google-logo.png" alt="Google logo">
+        Sign in with Google
+      </button>
+    </div>
+  </div>
+
+  <!-- Chat Application -->
+  <div id="chatApp" style="display: none;">
     <!-- User List Sidebar -->
     <div id="userList">
       <div id="userHeader">
@@ -21,7 +33,7 @@
     <!-- Chat Window -->
     <div id="chatWindow">
       <div id="chatHeader">
-        <span id="currentChat">Select a contact to chat</span>
+        <span id="currentChat">Select a contact to start chatting</span>
       </div>
       <div id="messages"></div>
       <div class="input-container">
@@ -51,34 +63,57 @@
     const app = firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
+    
     let currentUser = null;
     let currentReceiver = null;
 
-    // Authentication
+    // Authentication Functions
     function signInWithGoogle() {
       const provider = new firebase.auth.GoogleAuthProvider();
-      auth.signInWithPopup(provider);
+      auth.signInWithPopup(provider)
+        .catch(error => {
+          console.error("Sign-in error:", error);
+          alert("Sign-in failed. Please try again.");
+        });
     }
 
     function signOut() {
-      auth.signOut();
-      window.location.reload();
+      auth.signOut()
+        .then(() => {
+          currentUser = null;
+          currentReceiver = null;
+          document.getElementById('chatApp').style.display = 'none';
+          document.getElementById('authScreen').style.display = 'block';
+        })
+        .catch(error => {
+          console.error("Sign-out error:", error);
+        });
     }
 
-    // Auth state handler
+    // Auth State Listener
     auth.onAuthStateChanged(user => {
+      const authScreen = document.getElementById('authScreen');
+      const chatApp = document.getElementById('chatApp');
+      
       if (user) {
         currentUser = user;
+        authScreen.style.display = 'none';
+        chatApp.style.display = 'grid';
+        
+        // Update user info
         document.getElementById('userPhoto').src = user.photoURL;
         document.getElementById('userName').textContent = user.displayName;
+        
+        // Initialize user in Firestore
         checkUserExists(user);
         loadUsers();
       } else {
-        window.location.href = '/'; // Redirect if not authenticated
+        chatApp.style.display = 'none';
+        authScreen.style.display = 'block';
       }
     });
 
-    // Check/Create user in Firestore
+    // User Management
     function checkUserExists(user) {
       const userRef = db.collection('users').doc(user.uid);
       userRef.get().then(doc => {
@@ -94,7 +129,7 @@
       });
     }
 
-    // Load all users
+    // Chat Functions
     function loadUsers() {
       db.collection('users').onSnapshot(snapshot => {
         const usersDiv = document.getElementById('users');
@@ -114,14 +149,12 @@
       });
     }
 
-    // Open chat with selected user
     function openChat(receiverId, receiverName) {
       currentReceiver = receiverId;
       document.getElementById('currentChat').textContent = receiverName;
       loadMessages();
     }
 
-    // Load chat history
     function loadMessages() {
       if (!currentReceiver) return;
       
@@ -149,7 +182,6 @@
       });
     }
 
-    // Send message
     function sendMessage() {
       if (!currentUser || !currentReceiver) return;
 
@@ -168,11 +200,6 @@
 
       input.value = "";
     }
-
-    // Initialize
-    (function init() {
-      if (!auth.currentUser) signInWithGoogle();
-    })();
   </script>
 </body>
 </html>
