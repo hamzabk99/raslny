@@ -69,28 +69,36 @@
 
     // Authentication Functions
     function signInWithGoogle() {
-      const provider = new firebase.auth.GoogleAuthProvider();
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      
-      if (isMobile) {
-        auth.signInWithRedirect(provider);
-      } else {
-        auth.signInWithPopup(provider).catch(error => {
-          console.error("Sign-in error:", error);
-          alert("Sign-in failed. Please try again.");
-        });
+      try {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        if (isMobile) {
+          console.log("Mobile device detected, using redirect");
+          auth.signInWithRedirect(provider);
+        } else {
+          console.log("Desktop device detected, using popup");
+          auth.signInWithPopup(provider).catch(error => {
+            console.error("Sign-in error:", error);
+            alert("Sign-in failed: " + error.message);
+          });
+        }
+      } catch (error) {
+        console.error("Sign-in exception:", error);
+        alert("Authentication error: " + error.message);
       }
     }
 
     // Handle mobile redirect
     auth.getRedirectResult().catch(error => {
       console.error("Redirect error:", error);
-      alert("Sign-in failed. Please try again.");
+      alert("Redirect sign-in failed: " + error.message);
     });
 
     function signOut() {
       auth.signOut()
         .then(() => {
+          console.log("User signed out successfully");
           currentUser = null;
           currentReceiver = null;
           document.getElementById('chatApp').style.display = 'none';
@@ -98,6 +106,7 @@
         })
         .catch(error => {
           console.error("Sign-out error:", error);
+          alert("Sign-out failed: " + error.message);
         });
     }
 
@@ -106,17 +115,23 @@
       const authScreen = document.getElementById('authScreen');
       const chatApp = document.getElementById('chatApp');
       
-      if (user) {
-        currentUser = user;
-        authScreen.style.display = 'none';
-        chatApp.style.display = 'grid';
-        document.getElementById('userPhoto').src = user.photoURL;
-        document.getElementById('userName').textContent = user.displayName;
-        checkUserExists(user);
-        loadUsers();
-      } else {
-        chatApp.style.display = 'none';
-        authScreen.style.display = 'block';
+      try {
+        if (user) {
+          console.log("User authenticated:", user.uid);
+          currentUser = user;
+          authScreen.style.display = 'none';
+          chatApp.style.display = 'grid';
+          document.getElementById('userPhoto').src = user.photoURL;
+          document.getElementById('userName').textContent = user.displayName;
+          checkUserExists(user);
+          loadUsers();
+        } else {
+          console.log("No authenticated user");
+          chatApp.style.display = 'none';
+          authScreen.style.display = 'block';
+        }
+      } catch (error) {
+        console.error("Auth state error:", error);
       }
     });
 
@@ -125,6 +140,7 @@
       const userRef = db.collection('users').doc(user.uid);
       userRef.get().then(doc => {
         if (!doc.exists) {
+          console.log("Creating new user document");
           userRef.set({
             uid: user.uid,
             displayName: user.displayName,
@@ -133,11 +149,14 @@
             lastSeen: firebase.firestore.FieldValue.serverTimestamp()
           });
         }
+      }).catch(error => {
+        console.error("User check error:", error);
       });
     }
 
     // Chat Functions
     function loadUsers() {
+      console.log("Loading users...");
       db.collection('users').onSnapshot(snapshot => {
         const usersDiv = document.getElementById('users');
         usersDiv.innerHTML = '';
@@ -155,64 +174,100 @@
         });
       }, error => {
         console.error("Users load error:", error);
+        alert("Error loading contacts: " + error.message);
       });
     }
 
     function openChat(receiverId, receiverName) {
-      currentReceiver = receiverId;
-      document.getElementById('currentChat').textContent = receiverName;
-      loadMessages();
+      try {
+        console.log("Opening chat with:", receiverId);
+        currentReceiver = receiverId;
+        document.getElementById('currentChat').textContent = receiverName;
+        loadMessages();
+      } catch (error) {
+        console.error("Open chat error:", error);
+      }
     }
 
     function loadMessages() {
-      if (!currentReceiver) return;
+      if (!currentReceiver) {
+        console.log("No receiver selected");
+        return;
+      }
       
-      const chatId = [currentUser.uid, currentReceiver].sort().join('_');
-      const messagesRef = db.collection(`chats/${chatId}/messages`).orderBy('timestamp');
-
-      messagesRef.onSnapshot(snapshot => {
-        const messagesDiv = document.getElementById('messages');
-        messagesDiv.innerHTML = '';
+      try {
+        const chatId = [currentUser.uid, currentReceiver].sort().join('_');
+        console.log("Loading messages for chat:", chatId);
         
-        snapshot.forEach(doc => {
-          const msg = doc.data();
-          const isYou = msg.sender === currentUser.uid;
+        const messagesRef = db.collection(`chats/${chatId}/messages`).orderBy('timestamp');
+        
+        messagesRef.onSnapshot(snapshot => {
+          const messagesDiv = document.getElementById('messages');
+          messagesDiv.innerHTML = '';
           
-          messagesDiv.innerHTML += `
-            <div class="message ${isYou ? 'you' : 'others'}">
-              <div class="text">${msg.text}</div>
-              <span class="timestamp">
-                ${new Date(msg.timestamp?.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            </div>
-          `;
+          snapshot.forEach(doc => {
+            const msg = doc.data();
+            const isYou = msg.sender === currentUser.uid;
+            
+            messagesDiv.innerHTML += `
+              <div class="message ${isYou ? 'you' : 'others'}">
+                <div class="text">${msg.text}</div>
+                <span class="timestamp">
+                  ${new Date(msg.timestamp?.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            `;
+          });
+          messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }, error => {
+          console.error("Messages load error:", error);
+          alert("Error loading messages: " + error.message);
         });
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-      }, error => {
-        console.error("Messages load error:", error);
-      });
+        
+      } catch (error) {
+        console.error("Load messages error:", error);
+      }
     }
 
     function sendMessage() {
-      if (!currentUser || !currentReceiver) return;
+      try {
+        if (!auth.currentUser) {
+          alert("You need to sign in first!");
+          return;
+        }
+        
+        if (!currentReceiver) {
+          alert("Select a contact first!");
+          return;
+        }
 
-      const input = document.getElementById('messageInput');
-      const text = input.value.trim();
-      if (!text) return;
+        const input = document.getElementById('messageInput');
+        const text = input.value.trim();
+        if (!text) {
+          alert("Message cannot be empty!");
+          return;
+        }
 
-      const chatId = [currentUser.uid, currentReceiver].sort().join('_');
-      
-      db.collection(`chats/${chatId}/messages`).add({
-        text: text,
-        sender: currentUser.uid,
-        receiver: currentReceiver,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-      }).catch(error => {
-        console.error("Message send error:", error);
-        alert("Failed to send message. Please try again.");
-      });
+        const chatId = [currentUser.uid, currentReceiver].sort().join('_');
+        console.log("Sending message to chat:", chatId);
+        
+        db.collection(`chats/${chatId}/messages`).add({
+          text: text,
+          sender: currentUser.uid,
+          receiver: currentReceiver,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(docRef => {
+          console.log("Message sent successfully, ID:", docRef.id);
+        }).catch(error => {
+          console.error("Message send error:", error);
+          alert("Failed to send message: " + error.message);
+        });
 
-      input.value = "";
+        input.value = "";
+      } catch (error) {
+        console.error("Send message error:", error);
+        alert("Error sending message: " + error.message);
+      }
     }
   </script>
 </body>
