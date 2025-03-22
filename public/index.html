@@ -28,6 +28,7 @@
     </div>
     <div id="chatWindow">
       <div id="chatHeader">
+        <button class="back-btn" onclick="showUserList()">⬅</button>
         <span id="currentChat">Select a contact to chat</span>
       </div>
       <div id="messages"></div>
@@ -83,7 +84,7 @@
       if (user) {
         currentUser = user;
         authScreen.style.display = 'none';
-        chatApp.style.display = 'grid';
+        chatApp.style.display = 'flex';
         document.getElementById('userPhoto').src = user.photoURL || '';
         document.getElementById('userName').textContent = user.displayName || 'User';
         console.log("Current user signed in:", currentUser.uid);
@@ -140,7 +141,15 @@
       currentReceiver = receiverId;
       document.getElementById('currentChat').textContent = receiverName;
       console.log("Chat opened - Sender:", currentUser.uid, "Receiver:", receiverId);
+      document.getElementById('userList').classList.remove('active');
+      document.getElementById('chatWindow').style.display = 'flex';
       loadMessages();
+    }
+
+    function showUserList() {
+      document.getElementById('userList').classList.add('active');
+      document.getElementById('chatWindow').style.display = 'none';
+      currentReceiver = null; // Reset chat
     }
 
     function loadMessages() {
@@ -209,6 +218,7 @@
 
     (function init() {
       console.log("App initialized, waiting for auth state");
+      console.log("Body background color:", window.getComputedStyle(document.body).backgroundColor);
     })();
   </script>
 </body>

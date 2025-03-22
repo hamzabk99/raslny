@@ -9,6 +9,7 @@
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: #f0f2f5;
     height: 100vh;
+    overflow: hidden; /* Prevent scrolling on body */
   }
   
   /* Authentication Screen */
@@ -22,67 +23,75 @@
   
   .auth-container {
     background: white;
-    padding: 40px;
-    border-radius: 16px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     text-align: center;
-    max-width: 400px;
-    width: 90%;
+    width: 100%;
+    max-width: 360px;
+    margin: 10px;
   }
   
   .auth-container h1 {
-    margin-bottom: 30px;
+    margin-bottom: 20px;
     color: #1a1a1a;
-    font-size: 24px;
+    font-size: 20px;
   }
   
-  /* Chat Application Layout */
+  /* Chat Application Layout - Mobile First */
   #chatApp {
-    display: grid;
-    grid-template-columns: 300px 1fr;
+    display: flex;
+    flex-direction: column;
     height: 100vh;
     background: white;
   }
   
   /* User List Sidebar */
   #userList {
-    border-right: 1px solid #e9ecef;
+    flex: 1;
     overflow-y: auto;
+    display: none; /* Hidden by default on mobile */
+  }
+  
+  #userList.active {
+    display: block; /* Show when active */
   }
   
   #userHeader {
     display: flex;
     align-items: center;
-    padding: 20px;
-    gap: 15px;
+    padding: 15px;
+    gap: 10px;
     border-bottom: 1px solid #e9ecef;
+    background: white;
     position: sticky;
     top: 0;
-    background: white;
     z-index: 1;
   }
   
   #userPhoto {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     border: 2px solid #fff;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   }
   
   #userName {
     font-weight: 600;
     color: #1a1a1a;
     flex-grow: 1;
+    font-size: 16px;
   }
   
   #signOutBtn {
-    padding: 8px 16px;
+    padding: 6px 12px;
     background: #dc3545;
     color: white;
     border: none;
     border-radius: 6px;
     cursor: pointer;
+    font-size: 14px;
     transition: opacity 0.2s;
   }
   
@@ -91,21 +100,22 @@
   }
   
   #users {
-    padding: 15px;
+    padding: 10px;
   }
   
   .user-item {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     width: 100%;
     padding: 12px;
-    margin: 6px 0;
+    margin: 4px 0;
     background: transparent;
     border: none;
     border-radius: 8px;
     cursor: pointer;
     transition: background 0.2s;
+    font-size: 16px;
   }
   
   .user-item:hover {
@@ -113,19 +123,21 @@
   }
   
   .user-item img {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
   }
   
   /* Chat Window */
   #chatWindow {
+    flex: 1;
     display: flex;
     flex-direction: column;
+    height: 100vh; /* Full height on mobile */
   }
   
   #chatHeader {
-    padding: 20px;
+    padding: 15px;
     border-bottom: 1px solid #e9ecef;
     font-weight: 600;
     color: #1a1a1a;
@@ -133,23 +145,39 @@
     position: sticky;
     top: 0;
     z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  #chatHeader .back-btn {
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 5px;
+  }
+  
+  #currentChat {
+    flex-grow: 1;
+    font-size: 16px;
   }
   
   #messages {
     flex: 1;
-    padding: 20px;
+    padding: 15px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 10px;
     background: #f8f9fa;
   }
   
-  /* Message Bubbles */
   .message {
-    max-width: 70%;
-    padding: 12px 16px;
+    max-width: 80%;
+    padding: 10px 14px;
     border-radius: 12px;
+    font-size: 14px;
     animation: fadeIn 0.3s ease-out;
   }
   
@@ -165,13 +193,13 @@
     color: #1a1a1a;
     align-self: flex-start;
     border-bottom-left-radius: 4px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   }
   
   .timestamp {
     display: block;
-    font-size: 0.75rem;
-    margin-top: 6px;
+    font-size: 0.7rem;
+    margin-top: 4px;
     opacity: 0.8;
   }
   
@@ -183,12 +211,11 @@
     color: rgba(0, 0, 0, 0.6);
   }
   
-  /* Input Area */
   .input-container {
-    padding: 20px;
+    padding: 15px;
     border-top: 1px solid #e9ecef;
     display: flex;
-    gap: 12px;
+    gap: 10px;
     background: white;
     position: sticky;
     bottom: 0;
@@ -196,27 +223,28 @@
   
   input {
     flex: 1;
-    padding: 14px 20px;
+    padding: 12px 16px;
     border: 1px solid #dee2e6;
-    border-radius: 25px;
-    font-size: 16px;
+    border-radius: 20px;
+    font-size: 14px;
     outline: none;
     transition: all 0.3s;
   }
   
   input:focus {
     border-color: #007bff;
-    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.15);
   }
   
   button[onclick="sendMessage()"] {
-    padding: 14px 28px;
+    padding: 12px 20px;
     background: #007bff;
     color: white;
     border: none;
-    border-radius: 25px;
+    border-radius: 20px;
     cursor: pointer;
     font-weight: 600;
+    font-size: 14px;
     transition: all 0.2s;
   }
   
@@ -231,24 +259,12 @@
     to { opacity: 1; transform: translateY(0); }
   }
   
-  /* Responsive Design */
-  @media (max-width: 768px) {
-    #chatApp { grid-template-columns: 1fr; height: 100vh; }
-    #userList { display: none; }
-    .auth-container { padding: 20px; margin: 20px; }
-    .message { max-width: 85%; }
-    #chatHeader { padding: 15px; }
-    .input-container { padding: 15px; }
-    input { padding: 12px 16px; }
-    button[onclick="sendMessage()"] { padding: 12px 20px; }
-  }
-  
   /* Google Sign-in Button */
   .google-btn {
-    display: Leh-inline-flex;
+    display: inline-flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 24px;
+    gap: 10px;
+    padding: 12px 20px;
     background: #4285f4;
     color: white;
     border: none;
@@ -275,9 +291,9 @@
   .user-item::after {
     content: '';
     position: absolute;
-    right: 15px;
-    width: 10px;
-    height: 10px;
+    right: 10px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     background: #28a745;
     border: 2px solid white;
@@ -286,4 +302,101 @@
   
   .user-item.online::after {
     display: block;
+  }
+  
+  /* Desktop Layout */
+  @media (min-width: 769px) {
+    #chatApp {
+      flex-direction: row;
+    }
+  
+    #userList {
+      display: block;
+      width: 300px;
+      flex: none;
+    }
+  
+    #chatWindow {
+      flex: 1;
+      height: auto;
+    }
+  
+    #chatHeader .back-btn {
+      display: none; /* Hide back button on desktop */
+    }
+  
+    .auth-container {
+      padding: 40px;
+      max-width: 400px;
+    }
+  
+    #userHeader {
+      padding: 20px;
+    }
+  
+    #userPhoto {
+      width: 40px;
+      height: 40px;
+    }
+  
+    #userName {
+      font-size: 18px;
+    }
+  
+    #signOutBtn {
+      padding: 8px 16px;
+      font-size: 16px;
+    }
+  
+    .user-item {
+      padding: 12px;
+      margin: 6px 0;
+      font-size: 16px;
+    }
+  
+    .user-item img {
+      width: 40px;
+      height: 40px;
+    }
+  
+    #chatHeader {
+      padding: 20px;
+    }
+  
+    #currentChat {
+      font-size: 18px;
+    }
+  
+    #messages {
+      padding: 20px;
+      gap: 15px;
+    }
+  
+    .message {
+      max-width: 70%;
+      padding: 12px 16px;
+      font-size: 16px;
+    }
+  
+    .timestamp {
+      font-size: 0.75rem;
+      margin-top: 6px;
+    }
+  
+    .input-container {
+      padding: 20px;
+      gap: 12px;
+    }
+  
+    input {
+      padding: 14px 20px;
+      font-size: 16px;
+      border-radius: 25px;
+    }
+  
+    button[onclick="sendMessage()"] {
+      padding: 14px 28px;
+      font-size: 16px;
+      border-radius: 25px;
+    }
   }
