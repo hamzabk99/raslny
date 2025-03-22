@@ -1,37 +1,37 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Firebase Chat</title>
+  <title>Private Chat</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- Authentication Screen -->
-  <div id="auth">
-    <h1>Welcome to Chat</h1>
-    <button onclick="signInWithGoogle()" class="google-btn">
-      <img src="https://img.icons8.com/color/48/000000/google-logo.png" alt="Google logo">
-      Sign in with Google
-    </button>
-  </div>
-
-  <!-- Chat Interface -->
-  <div id="chat" style="display: none;">
-    <div id="userHeader">
-      <img id="userPhoto" alt="User photo">
-      <span id="userName"></span>
-      <button onclick="signOut()" id="signOutBtn">Sign Out</button>
+  <div id="chatApp">
+    <!-- User List Sidebar -->
+    <div id="userList">
+      <div id="userHeader">
+        <img id="userPhoto" alt="Your photo">
+        <span id="userName"></span>
+        <button onclick="signOut()" id="signOutBtn">Sign Out</button>
+      </div>
+      <h3>Contacts</h3>
+      <div id="users"></div>
     </div>
 
-    <div id="messages"></div>
-
-    <div class="input-container">
-      <input id="messageInput" placeholder="Type a message..." />
-      <button onclick="sendMessage()">Send</button>
+    <!-- Chat Window -->
+    <div id="chatWindow">
+      <div id="chatHeader">
+        <span id="currentChat">Select a contact to chat</span>
+      </div>
+      <div id="messages"></div>
+      <div class="input-container">
+        <input id="messageInput" placeholder="Type a message..." />
+        <button onclick="sendMessage()">Send</button>
+      </div>
     </div>
   </div>
 
-  <!-- Firebase SDKs -->
+  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
@@ -51,82 +51,128 @@
     const app = firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
-    const googleProvider = new firebase.auth.GoogleAuthProvider();
+    let currentUser = null;
+    let currentReceiver = null;
 
-    // Authentication functions
+    // Authentication
     function signInWithGoogle() {
-      auth.signInWithPopup(googleProvider).catch(error => {
-        console.error("Sign-in error:", error);
-      });
+      const provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider);
     }
 
     function signOut() {
       auth.signOut();
+      window.location.reload();
     }
 
-    // Auth state listener
+    // Auth state handler
     auth.onAuthStateChanged(user => {
-      const authDiv = document.getElementById('auth');
-      const chatDiv = document.getElementById('chat');
-      
       if (user) {
-        authDiv.style.display = 'none';
-        chatDiv.style.display = 'block';
-        document.getElementById('userName').textContent = user.displayName;
+        currentUser = user;
         document.getElementById('userPhoto').src = user.photoURL;
-        window.currentUser = user;
+        document.getElementById('userName').textContent = user.displayName;
+        checkUserExists(user);
+        loadUsers();
       } else {
-        authDiv.style.display = 'block';
-        chatDiv.style.display = 'none';
-        window.currentUser = null;
+        window.location.href = '/'; // Redirect if not authenticated
       }
     });
 
-    // Real-time messages
-    db.collection("messages")
-      .orderBy("timestamp")
-      .onSnapshot((snapshot) => {
+    // Check/Create user in Firestore
+    function checkUserExists(user) {
+      const userRef = db.collection('users').doc(user.uid);
+      userRef.get().then(doc => {
+        if (!doc.exists) {
+          userRef.set({
+            uid: user.uid,
+            displayName: user.displayName,
+            email: user.email,
+            photoURL: user.photoURL,
+            lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        }
+      });
+    }
+
+    // Load all users
+    function loadUsers() {
+      db.collection('users').onSnapshot(snapshot => {
+        const usersDiv = document.getElementById('users');
+        usersDiv.innerHTML = '';
+        
+        snapshot.forEach(doc => {
+          const user = doc.data();
+          if (user.uid !== currentUser.uid) {
+            usersDiv.innerHTML += `
+              <button class="user-item" onclick="openChat('${user.uid}', '${user.displayName}')">
+                <img src="${user.photoURL}" class="user-avatar">
+                ${user.displayName}
+              </button>
+            `;
+          }
+        });
+      });
+    }
+
+    // Open chat with selected user
+    function openChat(receiverId, receiverName) {
+      currentReceiver = receiverId;
+      document.getElementById('currentChat').textContent = receiverName;
+      loadMessages();
+    }
+
+    // Load chat history
+    function loadMessages() {
+      if (!currentReceiver) return;
+      
+      const chatId = [currentUser.uid, currentReceiver].sort().join('_');
+      const messagesRef = db.collection(`chats/${chatId}/messages`).orderBy('timestamp');
+
+      messagesRef.onSnapshot(snapshot => {
         const messagesDiv = document.getElementById('messages');
-        messagesDiv.innerHTML = "";
+        messagesDiv.innerHTML = '';
         
         snapshot.forEach(doc => {
           const msg = doc.data();
-          const isYou = msg.user.id === currentUser?.uid;
+          const isYou = msg.sender === currentUser.uid;
           
           messagesDiv.innerHTML += `
             <div class="message ${isYou ? 'you' : 'others'}">
-              <img src="${msg.user.photo}" class="user-avatar">
-              <div class="content">
-                <div class="text">${msg.text}</div>
-                <span class="timestamp">
-                  ${msg.user.name} • ${new Date(msg.timestamp?.toDate()).toLocaleTimeString()}
-                </span>
-              </div>
+              <div class="text">${msg.text}</div>
+              <span class="timestamp">
+                ${new Date(msg.timestamp?.toDate()).toLocaleTimeString()}
+              </span>
             </div>
           `;
         });
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
       });
+    }
 
     // Send message
     function sendMessage() {
-      if (!currentUser) return;
-      
-      const input = document.getElementById('messageInput');
-      if (!input.value.trim()) return;
+      if (!currentUser || !currentReceiver) return;
 
-      db.collection("messages").add({
-        text: input.value,
-        user: {
-          id: currentUser.uid,
-          name: currentUser.displayName,
-          photo: currentUser.photoURL
-        },
+      const input = document.getElementById('messageInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const chatId = [currentUser.uid, currentReceiver].sort().join('_');
+      
+      db.collection(`chats/${chatId}/messages`).add({
+        text: text,
+        sender: currentUser.uid,
+        receiver: currentReceiver,
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
       });
 
       input.value = "";
     }
+
+    // Initialize
+    (function init() {
+      if (!auth.currentUser) signInWithGoogle();
+    })();
   </script>
 </body>
 </html>
