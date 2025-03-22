@@ -6,8 +6,19 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div id="chatApp">
-    <!-- User List Sidebar -->
+  <!-- Authentication Screen -->
+  <div id="authScreen">
+    <div class="auth-container">
+      <h1>Welcome to Private Chat</h1>
+      <button class="google-btn" onclick="signInWithGoogle()">
+        <img src="https://www.google.com/favicon.ico" alt="Google Icon">
+        Sign in with Google
+      </button>
+    </div>
+  </div>
+
+  <!-- Chat Application (hidden until signed in) -->
+  <div id="chatApp" style="display: none;">
     <div id="userList">
       <div id="userHeader">
         <img id="userPhoto" alt="Your photo">
@@ -17,8 +28,6 @@
       <h3>Contacts</h3>
       <div id="users"></div>
     </div>
-
-    <!-- Chat Window -->
     <div id="chatWindow">
       <div id="chatHeader">
         <span id="currentChat">Select a contact to chat</span>
@@ -72,16 +81,22 @@
 
     // Handle auth state changes
     auth.onAuthStateChanged(user => {
+      const authScreen = document.getElementById('authScreen');
+      const chatApp = document.getElementById('chatApp');
+      
       if (user) {
         currentUser = user;
+        authScreen.style.display = 'none';
+        chatApp.style.display = 'grid';
         document.getElementById('userPhoto').src = user.photoURL || '';
         document.getElementById('userName').textContent = user.displayName || 'User';
         console.log("Current user:", currentUser.uid); // Debug
         checkUserExists(user);
         loadUsers();
       } else {
-        console.log("No user signed in, redirecting...");
-        window.location.href = '/'; // Redirect if not authenticated
+        console.log("No user signed in, showing auth screen");
+        authScreen.style.display = 'flex';
+        chatApp.style.display = 'none';
       }
     });
 
@@ -201,17 +216,9 @@
       });
     }
 
-    // Initialize
+    // Initialize (no automatic sign-in here, relying on button)
     (function init() {
-      if (!auth.currentUser) {
-        signInWithGoogle().then(() => {
-          console.log("Sign-in complete");
-        }).catch(error => {
-          console.error("Init sign-in failed:", error);
-        });
-      } else {
-        console.log("User already signed in:", auth.currentUser.uid);
-      }
+      console.log("App initialized, waiting for auth state");
     })();
   </script>
 </body>
