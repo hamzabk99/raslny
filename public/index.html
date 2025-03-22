@@ -37,14 +37,14 @@
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
 
   <script>
-    // Replace with your Firebase config
+    // Your Firebase config
     const firebaseConfig = {
-        apiKey: "AIzaSyA3h2VF-GeE_AKjKcsbDF-zw1n1Y9Z_ckA",
-        authDomain: "web-chat-eaa23.firebaseapp.com",
-        projectId: "web-chat-eaa23",
-        storageBucket: "web-chat-eaa23.firebasestorage.app",
-        messagingSenderId: "640664372760",
-        appId: "1:640664372760:web:8b44f49ac91a4465b1256d"
+      apiKey: "AIzaSyA3h2VF-GeE_AKjKcsbDF-zw1n1Y9Z_ckA",
+      authDomain: "web-chat-eaa23.firebaseapp.com",
+      projectId: "web-chat-eaa23",
+      storageBucket: "web-chat-eaa23.firebasestorage.app",
+      messagingSenderId: "640664372760",
+      appId: "1:640664372760:web:8b44f49ac91a4465b1256d"
     };
 
     // Initialize Firebase
@@ -54,60 +54,58 @@
     let currentUser = null;
     let currentReceiver = null;
 
-    // Authentication functions
+    // Sign in with Google
     function signInWithGoogle() {
       const provider = new firebase.auth.GoogleAuthProvider();
-      auth.signInWithPopup(provider)
+      return auth.signInWithPopup(provider)
         .catch(error => {
-          console.error("Error during sign in:", error);
+          console.error("Sign-in error:", error);
+          alert("Failed to sign in. Please try again.");
         });
     }
 
+    // Sign out
     function signOut() {
-      auth.signOut()
-        .then(() => {
-          window.location.reload();
-        })
-        .catch(error => {
-          console.error("Error during sign out:", error);
-        });
+      auth.signOut();
+      window.location.reload();
     }
 
-    // Listen for auth state changes
+    // Handle auth state changes
     auth.onAuthStateChanged(user => {
       if (user) {
         currentUser = user;
-        document.getElementById('userPhoto').src = user.photoURL;
-        document.getElementById('userName').textContent = user.displayName;
+        document.getElementById('userPhoto').src = user.photoURL || '';
+        document.getElementById('userName').textContent = user.displayName || 'User';
+        console.log("Current user:", currentUser.uid); // Debug
         checkUserExists(user);
         loadUsers();
       } else {
-        // Prompt sign in if no user is authenticated
-        signInWithGoogle();
+        console.log("No user signed in, redirecting...");
+        window.location.href = '/'; // Redirect if not authenticated
       }
     });
 
-    // Check or create the user document in Firestore
+    // Check/Create user in Firestore
     function checkUserExists(user) {
       const userRef = db.collection('users').doc(user.uid);
-      userRef.get()
-        .then(doc => {
-          if (!doc.exists) {
-            return userRef.set({
-              uid: user.uid,
-              displayName: user.displayName,
-              email: user.email,
-              photoURL: user.photoURL,
-              lastSeen: firebase.firestore.FieldValue.serverTimestamp()
-            });
-          }
-        })
-        .catch(error => {
-          console.error("Error checking/creating user:", error);
-        });
+      userRef.get().then(doc => {
+        if (!doc.exists) {
+          userRef.set({
+            uid: user.uid,
+            displayName: user.displayName,
+            email: user.email,
+            photoURL: user.photoURL,
+            lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+          }).catch(error => {
+            console.error("Error creating user:", error);
+          });
+        }
+      }).catch(error => {
+        console.error("Error checking user:", error);
+      });
     }
 
-    // Load all contacts (other users)
+    // Load all users
     function loadUsers() {
       db.collection('users').onSnapshot(snapshot => {
         const usersDiv = document.getElementById('users');
@@ -116,11 +114,9 @@
         snapshot.forEach(doc => {
           const user = doc.data();
           if (user.uid !== currentUser.uid) {
-            // Escape single quotes in the display name for safe insertion in the onclick attribute.
-            const safeDisplayName = user.displayName.replace(/'/g, "\\'");
             usersDiv.innerHTML += `
-              <button class="user-item" onclick="openChat('${user.uid}', '${safeDisplayName}')">
-                <img src="${user.photoURL}" class="user-avatar">
+              <button class="user-item" onclick="openChat('${user.uid}', '${user.displayName}')">
+                <img src="${user.photoURL}" class="user-avatar" onerror="this.src='data:,'">
                 ${user.displayName}
               </button>
             `;
@@ -131,18 +127,23 @@
       });
     }
 
-    // Open chat with a selected contact
+    // Open chat with selected user
     function openChat(receiverId, receiverName) {
       currentReceiver = receiverId;
       document.getElementById('currentChat').textContent = receiverName;
+      console.log("Chat opened with:", receiverId); // Debug
       loadMessages();
     }
 
-    // Load chat history for the active conversation
+    // Load chat history
     function loadMessages() {
-      if (!currentReceiver) return;
+      if (!currentReceiver) {
+        console.log("No receiver selected, skipping loadMessages");
+        return;
+      }
       
       const chatId = [currentUser.uid, currentReceiver].sort().join('_');
+      console.log("Loading messages for chatId:", chatId); // Debug
       const messagesRef = db.collection(`chats/${chatId}/messages`).orderBy('timestamp');
 
       messagesRef.onSnapshot(snapshot => {
@@ -152,52 +153,66 @@
         snapshot.forEach(doc => {
           const msg = doc.data();
           const isYou = msg.sender === currentUser.uid;
-          const timestamp = msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString() : '';
           
           messagesDiv.innerHTML += `
             <div class="message ${isYou ? 'you' : 'others'}">
               <div class="text">${msg.text}</div>
-              <span class="timestamp">${timestamp}</span>
+              <span class="timestamp">
+                ${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString() : 'Sending...'}
+              </span>
             </div>
           `;
         });
-        // Auto-scroll to the latest message
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
       }, error => {
         console.error("Error loading messages:", error);
       });
     }
 
-    // Send a message to the active conversation
+    // Send message
     function sendMessage() {
-      if (!currentUser) {
-        alert("You are not authenticated. Please sign in.");
-        return;
-      }
-      if (!currentReceiver) {
+      if (!currentUser || !currentReceiver) {
         alert("Please select a contact to chat with.");
+        console.log("Send failed: No user or receiver");
         return;
       }
 
       const input = document.getElementById('messageInput');
       const text = input.value.trim();
-      if (!text) return;
+      if (!text) {
+        console.log("Send failed: Empty message");
+        return;
+      }
 
       const chatId = [currentUser.uid, currentReceiver].sort().join('_');
+      console.log("Sending message to chatId:", chatId); // Debug
       
       db.collection(`chats/${chatId}/messages`).add({
         text: text,
         sender: currentUser.uid,
         receiver: currentReceiver,
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
-      })
-      .then(() => {
-        input.value = "";
-      })
-      .catch(error => {
+      }).then(() => {
+        console.log("Message sent successfully");
+        input.value = ""; // Clear input only on success
+      }).catch(error => {
         console.error("Error sending message:", error);
+        alert("Failed to send message. Check console for details.");
       });
     }
+
+    // Initialize
+    (function init() {
+      if (!auth.currentUser) {
+        signInWithGoogle().then(() => {
+          console.log("Sign-in complete");
+        }).catch(error => {
+          console.error("Init sign-in failed:", error);
+        });
+      } else {
+        console.log("User already signed in:", auth.currentUser.uid);
+      }
+    })();
   </script>
 </body>
 </html>
