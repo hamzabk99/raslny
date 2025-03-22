@@ -3,7 +3,7 @@
 <head>
   <title>Chat</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="styles.css?v=6">
+  <link rel="stylesheet" href="styles.css?v=7">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
@@ -59,21 +59,6 @@
     let currentUser = null;
     let currentReceiver = null;
 
-    // Request notification permission on load
-    function requestNotificationPermission() {
-      if ("Notification" in window) {
-        Notification.requestPermission().then(permission => {
-          if (permission === "granted") {
-            console.log("Notification permission granted");
-          } else {
-            console.log("Notification permission denied");
-          }
-        });
-      } else {
-        console.log("Notifications not supported in this browser");
-      }
-    }
-
     function signInWithGoogle() {
       console.log("Sign-in button clicked");
       const provider = new firebase.auth.GoogleAuthProvider();
@@ -105,7 +90,6 @@
         console.log("Current user signed in:", currentUser.uid);
         checkUserExists(user);
         loadUsers();
-        requestNotificationPermission(); // Ask for permission after sign-in
       } else {
         console.log("No user signed in, showing auth screen");
         authScreen.style.display = 'flex';
@@ -141,13 +125,16 @@
           const user = doc.data();
           if (user.uid !== currentUser.uid) {
             usersDiv.innerHTML += `
-              <button class="user-item" onclick="openChat('${user.uid}', '${user.displayName}')">
+              <div class="user-item" onclick="openChat('${user.uid}', '${user.displayName}')">
                 <img src="${user.photoURL}" onerror="this.src='data:,'">
-                <span>${user.displayName}</span>
-              </button>
+                <span class="user-name">${user.displayName}</span>
+                <span class="notification" id="notif-${user.uid}"></span>
+              </div>
             `;
           }
         });
+        // Reload notifications after user list updates
+        if (currentReceiver) loadMessages(); // Ensure notifications sync with active chat
       }, error => {
         console.error("Error loading users:", error);
       });
@@ -180,34 +167,30 @@
 
       messagesRef.onSnapshot(snapshot => {
         const messagesDiv = document.getElementById('messages');
-        let isFirstLoad = messagesDiv.innerHTML === ''; // Detect initial load
+        messagesDiv.innerHTML = '';
         
         snapshot.forEach(doc => {
           const msg = doc.data();
           const isYou = msg.sender === currentUser.uid;
           
-          // Skip rendering if message already exists (prevent duplicates)
-          if (!document.getElementById(doc.id)) {
-            messagesDiv.innerHTML += `
-              <div id="${doc.id}" class="message ${isYou ? 'you' : 'others'}">
-                ${msg.text}
-                <span class="timestamp">
-                  ${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}
-                </span>
-              </div>
-            `;
-            
-            // Show notification for new messages from others (not on initial load)
-            if (!isYou && !isFirstLoad && Notification.permission === "granted") {
-              new Notification(`${document.getElementById('currentChat').textContent}`, {
-                body: msg.text,
-                icon: 'https://www.google.com/favicon.ico' // Optional: use a chat icon
-              });
+          messagesDiv.innerHTML += `
+            <div id="${doc.id}" class="message ${isYou ? 'you' : 'others'}">
+              ${msg.text}
+              <span class="timestamp">
+                ${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}
+              </span>
+            </div>
+          `;
+          
+          // Update notification in user list for others' messages
+          if (!isYou) {
+            const notifElement = document.getElementById(`notif-${msg.sender}`);
+            if (notifElement && msg.sender !== currentReceiver) {
+              notifElement.textContent = msg.text.length > 20 ? msg.text.substring(0, 20) + '...' : msg.text;
             }
           }
         });
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        isFirstLoad = false; // Reset after first load
       }, error => {
         console.error("Error loading messages:", error);
       });
@@ -239,13 +222,14 @@
       }).then(() => {
         console.log("Message sent successfully");
         input.value = "";
+        // Force reload messages to update timestamp immediately
+        loadMessages();
       }).catch(error => {
         console.error("Error sending message:", error);
         alert("Failed to send message: " + error.message);
       });
     }
 
-    // Initialize app
     console.log("App initialized");
   </script>
 </body>
