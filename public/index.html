@@ -3,7 +3,7 @@
 <head>
   <title>Chat</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="styles.css?v=4">
+  <link rel="stylesheet" href="styles.css?v=5">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
@@ -35,7 +35,7 @@
       <div class="input-container">
         <input id="messageInput" placeholder="Type a message..." onkeydown="if (event.key === 'Enter') sendMessage()" />
         <input type="file" id="mediaUpload" accept="image/*,video/*" style="display: none;" onchange="uploadMedia()" />
-        <button class="upload-btn" onclick="document.getElementById('mediaUpload').click()">+</button>
+        <button id="uploadBtn" class="upload-btn" onclick="document.getElementById('mediaUpload').click()" disabled>+</button>
         <button onclick="sendMessage()">Send</button>
       </div>
     </div>
@@ -147,12 +147,14 @@
       console.log("Chat opened - Sender:", currentUser.uid, "Receiver:", receiverId);
       document.getElementById('userList').classList.remove('active');
       document.getElementById('chatWindow').style.display = 'flex';
+      document.getElementById('uploadBtn').disabled = false; // Enable upload button
       loadMessages();
     }
 
     function showUserList() {
       document.getElementById('userList').classList.add('active');
       document.getElementById('chatWindow').style.display = 'none';
+      document.getElementById('uploadBtn').disabled = true; // Disable upload button
       currentReceiver = null;
     }
 
@@ -244,12 +246,16 @@
     function uploadMedia() {
       if (!currentUser || !currentReceiver) {
         alert("Please select a contact to chat with.");
+        console.log("Upload failed: No receiver selected");
         return;
       }
 
       const fileInput = document.getElementById('mediaUpload');
       const file = fileInput.files[0];
-      if (!file) return;
+      if (!file) {
+        console.log("No file selected");
+        return;
+      }
 
       const chatId = [currentUser.uid, currentReceiver].sort().join('_');
       const storageRef = storage.ref(`chats/${chatId}/${Date.now()}_${file.name}`);
@@ -277,6 +283,7 @@
               fileInput.value = ""; // Clear the input
             }).catch(error => {
               console.error("Error saving media message:", error);
+              alert("Failed to save media message: " + error.message);
             });
           });
         }
