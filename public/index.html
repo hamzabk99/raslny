@@ -64,13 +64,19 @@
         messagesDiv.innerHTML = "";
         
         snapshot.forEach(doc => {
-          const msg = doc.data();
-          messagesDiv.innerHTML += `
-            <div class="message">
-              <strong>${msg.user}:</strong> ${msg.text}
+            const msg = doc.data();
+            const isYou = msg.user === user; // 👈 Checks if message is from current user
+            
+            messagesDiv.innerHTML += `
+            <div class="message ${isYou ? 'you' : 'others'}">
+                <div class="text">${msg.text}</div>
+                <span class="timestamp">
+                ${msg.user} • ${new Date(msg.timestamp?.toDate()).toLocaleTimeString()}
+                </span>
             </div>
-          `;
+            `;
         });
+
         messagesDiv.scrollTop = messagesDiv.scrollHeight; // Auto-scroll
       });
   </script>
