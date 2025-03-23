@@ -3,7 +3,7 @@
 <head>
   <title>Chat</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="styles.css?v=13">
+  <link rel="stylesheet" href="styles.css?v=14">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
@@ -25,19 +25,29 @@
         <button onclick="showProfile()" id="profileBtn">Profile</button>
         <button onclick="signOut()" id="signOutBtn">Sign Out</button>
       </div>
+      <div id="createContainer">
+        <button onclick="createChannel()">Create Channel</button>
+        <button onclick="createGroup()">Create Group</button>
+      </div>
       <div id="searchContainer">
-        <input id="searchInput" placeholder="Search by username (e.g., 1, 2)..." oninput="searchUsers()">
+        <input id="searchInput" placeholder="Search by username (e.g., channel1, group2)..." oninput="searchEntities()">
         <div id="searchResults"></div>
       </div>
-      <div id="users"></div>
+      <div id="contacts"></div>
+      <div id="requestsContainer">
+        <h3>Pending Requests</h3>
+        <div id="pendingRequests"></div>
+      </div>
     </div>
     <div id="chatWindow" style="display: none;">
       <div id="chatHeader">
         <button class="back-btn" onclick="showUserList()">←</button>
         <span id="currentChat">Select a contact</span>
+        <button id="callBtn" style="display: none;" onclick="startCall()">Call</button>
+        <button id="addAdminBtn" style="display: none;" onclick="addAdmin()">Add Admin</button>
       </div>
       <div id="messages"></div>
-      <div class="input-container">
+      <div class="input-container" id="messageInputContainer">
         <input id="messageInput" placeholder="Type a message..." onkeydown="if (event.key === 'Enter') sendMessage()" />
         <button onclick="sendMessage()">Send</button>
       </div>
@@ -75,16 +85,14 @@
     const auth = firebase.auth();
     let currentUser = null;
     let currentReceiver = null;
+    let currentEntityType = null; // 'user', 'channel', or 'group'
 
     function signInWithGoogle() {
-      console.log("Sign-in button clicked");
       const provider = new firebase.auth.GoogleAuthProvider();
       return auth.signInWithPopup(provider)
-        .then((result) => {
-          console.log("Sign-in successful:", result.user.uid);
-        })
+        .then((result) => console.log("Sign-in successful:", result.user.uid))
         .catch(error => {
-          console.error("Sign-in error:", error.code, error.message);
+          console.error("Sign-in error:", error);
           alert("Failed to sign in: " + error.message);
         });
     }
@@ -101,7 +109,6 @@
       
       if (user) {
         currentUser = user;
-        console.log("User signed in:", user.uid);
         authScreen.style.display = 'none';
         chatApp.style.display = 'flex';
         userList.classList.add('active');
@@ -109,8 +116,8 @@
         document.getElementById('userName').textContent = user.displayName || 'User';
         checkUserExists(user);
         loadContacts();
+        loadPendingRequests();
       } else {
-        console.log("No user signed in");
         authScreen.style.display = 'flex';
         chatApp.style.display = 'none';
       }
@@ -120,10 +127,7 @@
       const userRef = db.collection('users').doc(user.uid);
       userRef.get().then(doc => {
         if (!doc.exists) {
-          console.log("Creating new user document for:", user.uid);
           assignUsername(user);
-        } else {
-          console.log("User document exists:", doc.data());
         }
       }).catch(error => {
         console.error("Error checking user:", error);
@@ -136,11 +140,9 @@
       db.runTransaction(transaction => {
         return transaction.get(counterRef).then(counterDoc => {
           let nextId = 1;
-          if (counterDoc.exists) {
-            nextId = counterDoc.data().count + 1;
-          }
+          if (counterDoc.exists) nextId = counterDoc.data().count + 1;
           transaction.set(counterRef, { count: nextId }, { merge: true });
-          transaction.set(db.collection('users').doc(user.uid), {
+          transaction.set(userRef, {
             uid: user.uid,
             displayName: user.displayName,
             username: nextId.toString(),
@@ -151,22 +153,19 @@
           });
           return nextId;
         });
-      }).then(nextId => {
-        console.log("User document created with username:", nextId);
-      }).catch(error => {
-        console.error("Error assigning username:", error);
-        resetUsernames();
-      });
+      }).then(nextId => console.log("User created with username:", nextId))
+        .catch(error => {
+          console.error("Error assigning username:", error);
+          resetUsernames();
+        });
     }
 
     function resetUsernames() {
-      console.log("Resetting all usernames...");
       db.collection('users').get().then(snapshot => {
         const batch = db.batch();
         let counter = 1;
         snapshot.forEach(doc => {
-          const userRef = db.collection('users').doc(doc.id);
-          batch.update(userRef, { username: counter.toString() });
+          batch.update(db.collection('users').doc(doc.id), { username: counter.toString() });
           counter++;
         });
         batch.set(db.collection('metadata').doc('userCounter'), { count: counter - 1 });
@@ -174,165 +173,270 @@
       }).then(() => {
         console.log("Usernames reset successfully");
         loadContacts();
-      }).catch(error => {
-        console.error("Error resetting usernames:", error);
-      });
+      }).catch(error => console.error("Error resetting usernames:", error));
+    }
+
+    function createChannel() {
+      const counterRef = db.collection('metadata').doc('channelCounter');
+      db.runTransaction(transaction => {
+        return transaction.get(counterRef).then(counterDoc => {
+          let nextId = 1;
+          if (counterDoc.exists) nextId = counterDoc.data().count + 1;
+          transaction.set(counterRef, { count: nextId }, { merge: true });
+          const channelRef = db.collection('channels').doc(`channel${nextId}`);
+          transaction.set(channelRef, {
+            name: `Channel ${nextId}`,
+            username: `channel${nextId}`,
+            creator: currentUser.uid,
+            admins: [currentUser.uid],
+            members: [currentUser.uid],
+            type: 'channel',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          return nextId;
+        });
+      }).then(nextId => {
+        console.log("Channel created:", `channel${nextId}`);
+        loadContacts();
+      }).catch(error => console.error("Error creating channel:", error));
+    }
+
+    function createGroup() {
+      const counterRef = db.collection('metadata').doc('groupCounter');
+      db.runTransaction(transaction => {
+        return transaction.get(counterDoc => {
+          let nextId = 1;
+          if (counterDoc.exists) nextId = counterDoc.data().count + 1;
+          transaction.set(counterRef, { count: nextId }, { merge: true });
+          const groupRef = db.collection('groups').doc(`group${nextId}`);
+          transaction.set(groupRef, {
+            name: `Group ${nextId}`,
+            username: `group${nextId}`,
+            creator: currentUser.uid,
+            members: [currentUser.uid],
+            type: 'group',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          return nextId;
+        });
+      }).then(nextId => {
+        console.log("Group created:", `group${nextId}`);
+        loadContacts();
+      }).catch(error => console.error("Error creating group:", error));
     }
 
     function loadContacts() {
-      console.log("Loading contacts for:", currentUser.uid);
-      const userRef = db.collection('users').doc(currentUser.uid);
-      const usersDiv = document.getElementById('users');
-      let unsubscribe = null;
+      const contactsDiv = document.getElementById('contacts');
+      contactsDiv.innerHTML = '';
+      const seenIds = new Set();
 
-      userRef.onSnapshot(doc => {
-        if (doc.exists) {
-          const following = doc.data().following || [];
-          usersDiv.innerHTML = '';
+      // Load followed users
+      db.collection('users').doc(currentUser.uid).onSnapshot(doc => {
+        const following = doc.data().following || [];
+        following.forEach(followId => {
+          seenIds.add(followId);
+          db.collection('users').doc(followId).get().then(followDoc => {
+            if (followDoc.exists) addContact(followDoc.data(), contactsDiv, 'user');
+          });
+        });
+      });
 
-          // Load followed users first
-          const seenIds = new Set();
-          following.forEach(followId => {
-            seenIds.add(followId);
-            db.collection('users').doc(followId).get().then(followDoc => {
-              if (followDoc.exists) {
-                addUserToList(followDoc.data(), usersDiv);
+      // Load channels and groups
+      ['channels', 'groups'].forEach(collection => {
+        db.collection(collection).where('members', 'array-contains', currentUser.uid)
+          .onSnapshot(snapshot => {
+            snapshot.forEach(doc => {
+              if (!seenIds.has(doc.id)) {
+                seenIds.add(doc.id);
+                addContact(doc.data(), contactsDiv, collection === 'channels' ? 'channel' : 'group');
               }
-            }).catch(error => {
-              console.error("Error fetching followed user:", error);
             });
           });
+      });
 
-          // Listen for incoming messages from anyone
-          if (unsubscribe) unsubscribe(); // Clean up previous listener
-          unsubscribe = db.collectionGroup('messages')
-            .where('receiver', '==', currentUser.uid)
-            .orderBy('timestamp')
-            .onSnapshot(snapshot => {
-              snapshot.docChanges().forEach(change => {
-                if (change.type === 'added') {
-                  const msg = change.doc.data();
-                  const senderId = msg.sender;
-                  if (!seenIds.has(senderId)) {
-                    seenIds.add(senderId);
-                    db.collection('users').doc(senderId).get().then(senderDoc => {
-                      if (senderDoc.exists) {
-                        addUserToList(senderDoc.data(), usersDiv);
-                        updateNotification(senderId, msg.text);
-                      }
-                    }).catch(error => {
-                      console.error("Error fetching sender:", error);
-                    });
-                  } else {
+      // Load incoming messages from non-followed users
+      db.collectionGroup('messages').where('receiver', '==', currentUser.uid)
+        .orderBy('timestamp').onSnapshot(snapshot => {
+          snapshot.docChanges().forEach(change => {
+            if (change.type === 'added') {
+              const msg = change.doc.data();
+              const senderId = msg.sender;
+              if (!seenIds.has(senderId)) {
+                seenIds.add(senderId);
+                db.collection('users').doc(senderId).get().then(senderDoc => {
+                  if (senderDoc.exists) {
+                    addContact(senderDoc.data(), contactsDiv, 'user');
                     updateNotification(senderId, msg.text);
                   }
-                }
-              });
-            }, error => {
-              console.error("Error listening for messages:", error);
-            });
-        } else {
-          console.log("User document not found, retrying creation");
-          checkUserExists(currentUser);
-        }
-      }, error => {
-        console.error("Error in loadContacts snapshot:", error);
-      });
+                });
+              } else {
+                updateNotification(senderId, msg.text);
+              }
+            }
+          });
+        });
     }
 
-    function addUserToList(user, usersDiv) {
-      const existingItem = document.querySelector(`.user-item[data-uid="${user.uid}"]`);
-      if (!existingItem) {
-        usersDiv.innerHTML += `
-          <div class="user-item" data-uid="${user.uid}" onclick="openChat('${user.uid}', '${user.displayName}')">
-            <img src="${user.photoURL}" onerror="this.src='data:,'">
-            <span class="user-name">${user.displayName} (@${user.username})</span>
-            <span class="notification" id="notif-${user.uid}"></span>
+    function addContact(data, container, type) {
+      const id = type === 'user' ? data.uid : data.username;
+      if (!document.querySelector(`.contact-item[data-id="${id}"]`)) {
+        container.innerHTML += `
+          <div class="contact-item" data-id="${id}" onclick="openChat('${id}', '${data.displayName || data.name}', '${type}')">
+            <img src="${data.photoURL || 'data:,'}" onerror="this.src='data:,'">
+            <span class="contact-name">${data.displayName || data.name} (@${data.username})</span>
+            <span class="notification" id="notif-${id}"></span>
           </div>
         `;
       }
     }
 
-    function updateNotification(senderId, messageText) {
-      const notifElement = document.getElementById(`notif-${senderId}`);
-      if (notifElement && senderId !== currentReceiver) {
-        const preview = messageText.length > 20 ? messageText.substring(0, 20) + '...' : messageText;
+    function updateNotification(id, text) {
+      const notifElement = document.getElementById(`notif-${id}`);
+      if (notifElement && id !== currentReceiver) {
+        const preview = text.length > 20 ? text.substring(0, 20) + '...' : text;
         notifElement.textContent = preview;
-        console.log(`Notification for ${senderId}: ${preview}`);
       }
     }
 
-    function searchUsers() {
+    function searchEntities() {
       const query = document.getElementById('searchInput').value.trim();
       const searchResults = document.getElementById('searchResults');
       searchResults.innerHTML = '';
       
       if (!query) return;
-      
-      console.log("Searching for username:", query);
-      db.collection('users')
-        .where('username', '==', query)
-        .limit(5)
-        .get()
+
+      // Search channels
+      db.collection('channels').where('username', '==', query).get()
         .then(snapshot => {
-          if (snapshot.empty) {
-            searchResults.innerHTML = '<p>No users found.</p>';
-          }
-          snapshot.forEach(doc => {
-            const user = doc.data();
-            if (user.uid !== currentUser.uid) {
-              searchResults.innerHTML += `
-                <div class="search-item" onclick="followUser('${user.uid}')">
-                  <img src="${user.photoURL}" onerror="this.src='data:,'">
-                  <span>${user.displayName} (@${user.username})</span>
-                  <button>Follow</button>
-                </div>
-              `;
-            }
-          });
-        }).catch(error => {
-          console.error("Error searching users:", error);
-          searchResults.innerHTML = '<p>Error searching users.</p>';
+          snapshot.forEach(doc => handleSearchResult(doc.data(), 'channel', searchResults));
+        });
+      // Search groups
+      db.collection('groups').where('username', '==', query).get()
+        .then(snapshot => {
+          snapshot.forEach(doc => handleSearchResult(doc.data(), 'group', searchResults));
+        });
+      // Search users
+      db.collection('users').where('username', '==', query).get()
+        .then(snapshot => {
+          snapshot.forEach(doc => handleSearchResult(doc.data(), 'user', searchResults));
         });
     }
 
-    function followUser(userId) {
-      console.log("Following user:", userId);
-      const userRef = db.collection('users').doc(currentUser.uid);
-      userRef.update({
-        following: firebase.firestore.FieldValue.arrayUnion(userId)
+    function handleSearchResult(data, type, container) {
+      if (type === 'user' && data.uid === currentUser.uid) return;
+      const id = type === 'user' ? data.uid : data.username;
+      container.innerHTML += `
+        <div class="search-item" onclick="applyToJoin('${id}', '${type}')">
+          <img src="${data.photoURL || 'data:,'}" onerror="this.src='data:,'">
+          <span>${data.displayName || data.name} (@${data.username})</span>
+          <button>Apply</button>
+        </div>
+      `;
+    }
+
+    function applyToJoin(id, type) {
+      const requestRef = db.collection('requests').doc();
+      requestRef.set({
+        applicant: currentUser.uid,
+        targetId: id,
+        targetType: type,
+        status: 'pending',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
       }).then(() => {
-        console.log("Successfully followed user:", userId);
-        loadContacts();
+        console.log(`Applied to join ${type}: ${id}`);
         document.getElementById('searchInput').value = '';
         document.getElementById('searchResults').innerHTML = '';
-      }).catch(error => {
-        console.error("Error following user:", error);
+      }).catch(error => console.error("Error applying:", error));
+    }
+
+    function loadPendingRequests() {
+      const requestsDiv = document.getElementById('pendingRequests');
+      db.collection('requests').where('status', '==', 'pending').onSnapshot(snapshot => {
+        requestsDiv.innerHTML = '';
+        snapshot.forEach(doc => {
+          const request = doc.data();
+          if (request.targetType === 'user') return;
+          const entityRef = db.collection(request.targetType + 's').doc(request.targetId);
+          entityRef.get().then(entityDoc => {
+            if (entityDoc.exists && entityDoc.data().creator === currentUser.uid) {
+              db.collection('users').doc(request.applicant).get().then(userDoc => {
+                if (userDoc.exists) {
+                  const user = userDoc.data();
+                  requestsDiv.innerHTML += `
+                    <div class="request-item">
+                      <span>${user.displayName} (@${user.username}) wants to join ${request.targetId}</span>
+                      <button onclick="acceptRequest('${doc.id}', '${request.applicant}', '${request.targetId}', '${request.targetType}')">Accept</button>
+                      <button onclick="rejectRequest('${doc.id}')">Reject</button>
+                    </div>
+                  `;
+                }
+              });
+            }
+          });
+        });
       });
     }
 
-    function openChat(receiverId, receiverName) {
-      currentReceiver = receiverId;
-      document.getElementById('currentChat').textContent = receiverName;
-      console.log("Chat opened - Sender:", currentUser.uid, "Receiver:", receiverId);
+    function acceptRequest(requestId, applicantId, targetId, targetType) {
+      const entityRef = db.collection(targetType + 's').doc(targetId);
+      entityRef.update({
+        members: firebase.firestore.FieldValue.arrayUnion(applicantId)
+      }).then(() => {
+        db.collection('requests').doc(requestId).update({ status: 'accepted' });
+        console.log(`Accepted ${applicantId} into ${targetId}`);
+        loadContacts();
+      }).catch(error => console.error("Error accepting request:", error));
+    }
+
+    function rejectRequest(requestId) {
+      db.collection('requests').doc(requestId).update({ status: 'rejected' })
+        .then(() => console.log("Request rejected"))
+        .catch(error => console.error("Error rejecting request:", error));
+    }
+
+    function openChat(id, name, type) {
+      currentReceiver = id;
+      currentEntityType = type;
+      document.getElementById('currentChat').textContent = name;
       document.getElementById('userList').classList.remove('active');
       document.getElementById('chatWindow').style.display = 'flex';
       document.getElementById('profilePage').style.display = 'none';
+      
+      const inputContainer = document.getElementById('messageInputContainer');
+      const callBtn = document.getElementById('callBtn');
+      const addAdminBtn = document.getElementById('addAdminBtn');
+      
+      if (type === 'channel') {
+        db.collection('channels').doc(id).get().then(doc => {
+          const data = doc.data();
+          inputContainer.style.display = data.admins.includes(currentUser.uid) ? 'flex' : 'none';
+          addAdminBtn.style.display = data.admins.includes(currentUser.uid) ? 'inline' : 'none';
+        });
+        callBtn.style.display = 'none';
+      } else if (type === 'group') {
+        inputContainer.style.display = 'flex';
+        callBtn.style.display = 'none';
+        addAdminBtn.style.display = 'none';
+      } else {
+        inputContainer.style.display = 'flex';
+        callBtn.style.display = 'inline';
+        addAdminBtn.style.display = 'none';
+      }
+      
       loadMessages();
-      const notifElement = document.getElementById(`notif-${receiverId}`);
+      const notifElement = document.getElementById(`notif-${id}`);
       if (notifElement) notifElement.textContent = '';
     }
 
     function showUserList() {
-      console.log("Showing user list");
       document.getElementById('userList').classList.add('active');
       document.getElementById('chatWindow').style.display = 'none';
       document.getElementById('profilePage').style.display = 'none';
       currentReceiver = null;
+      currentEntityType = null;
     }
 
     function showProfile() {
-      console.log("Showing profile page");
       document.getElementById('userList').classList.remove('active');
       document.getElementById('chatWindow').style.display = 'none';
       const profilePage = document.getElementById('profilePage');
@@ -344,25 +448,17 @@
         document.getElementById('profilePhoto').src = data.photoURL || '';
         document.getElementById('profileName').value = data.displayName || '';
         document.getElementById('fixedUsername').textContent = data.username;
-      }).catch(error => {
-        console.error("Error loading profile:", error);
-      });
+      }).catch(error => console.error("Error loading profile:", error));
     }
 
     function saveProfile() {
       const name = document.getElementById('profileName').value.trim();
-      
       if (!name) {
         alert("Name cannot be empty");
         return;
       }
-      
-      console.log("Saving profile:", { name });
       const userRef = db.collection('users').doc(currentUser.uid);
-      userRef.update({
-        displayName: name
-      }).then(() => {
-        console.log("Profile updated successfully");
+      userRef.update({ displayName: name }).then(() => {
         document.getElementById('userName').textContent = name;
         showUserList();
         loadContacts();
@@ -372,26 +468,49 @@
       });
     }
 
+    function addAdmin() {
+      const username = prompt("Enter username of new admin:");
+      if (!username) return;
+      
+      db.collection('users').where('username', '==', username).get().then(snapshot => {
+        if (snapshot.empty) {
+          alert("User not found");
+          return;
+        }
+        const userDoc = snapshot.docs[0];
+        const userId = userDoc.id;
+        db.collection('channels').doc(currentReceiver).update({
+          admins: firebase.firestore.FieldValue.arrayUnion(userId)
+        }).then(() => {
+          console.log(`Added ${username} as admin`);
+        }).catch(error => console.error("Error adding admin:", error));
+      });
+    }
+
+    function startCall() {
+      alert(`Simulating call to ${currentReceiver}. Real calling requires WebRTC setup.`);
+      // WebRTC implementation would go here
+    }
+
     function loadMessages() {
-      if (!currentReceiver) {
-        console.log("No receiver selected, skipping loadMessages");
-        return;
+      if (!currentReceiver) return;
+      
+      let messagesRef;
+      if (currentEntityType === 'user') {
+        const chatId = [currentUser.uid, currentReceiver].sort().join('_');
+        messagesRef = db.collection(`chats/${chatId}/messages`);
+      } else {
+        messagesRef = db.collection(`${currentEntityType}s/${currentReceiver}/messages`);
       }
       
-      const chatId = [currentUser.uid, currentReceiver].sort().join('_');
-      console.log("Loading messages for chatId:", chatId);
-      const messagesRef = db.collection(`chats/${chatId}/messages`).orderBy('timestamp');
-
-      messagesRef.onSnapshot(snapshot => {
+      messagesRef.orderBy('timestamp').onSnapshot(snapshot => {
         const messagesDiv = document.getElementById('messages');
         messagesDiv.innerHTML = '';
-        
         snapshot.forEach(doc => {
           const msg = doc.data();
           const isYou = msg.sender === currentUser.uid;
-          
           messagesDiv.innerHTML += `
-            <div id="${doc.id}" class="message ${isYou ? 'you' : 'others'}">
+            <div class="message ${isYou ? 'you' : 'others'}">
               ${msg.text}
               <span class="timestamp">
                 ${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}
@@ -400,47 +519,47 @@
           `;
         });
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
-      }, error => {
-        console.error("Error loading messages:", error);
       });
     }
 
     function sendMessage() {
-      if (!currentUser || !currentReceiver) {
-        alert("Please select a contact to chat with.");
-        console.log("Send failed: No user or receiver");
+      if (!currentReceiver) {
+        alert("Please select a contact.");
         return;
       }
-
       const input = document.getElementById('messageInput');
       const text = input.value.trim();
-      if (!text) {
-        console.log("Send failed: Empty message");
-        return;
+      if (!text) return;
+
+      let messagesRef;
+      if (currentEntityType === 'user') {
+        const chatId = [currentUser.uid, currentReceiver].sort().join('_');
+        messagesRef = db.collection(`chats/${chatId}/messages`);
+      } else {
+        messagesRef = db.collection(`${currentEntityType}s/${currentReceiver}/messages`);
+        if (currentEntityType === 'channel') {
+          db.collection('channels').doc(currentReceiver).get().then(doc => {
+            if (!doc.data().admins.includes(currentUser.uid)) {
+              alert("Only admins can send messages in channels.");
+              return;
+            }
+          });
+        }
       }
 
-      const chatId = [currentUser.uid, currentReceiver].sort().join('_');
-      console.log("Sending message to chatId:", chatId);
-      
-      db.collection(`chats/${chatId}/messages`).add({
+      messagesRef.add({
         text: text,
-        type: 'text',
         sender: currentUser.uid,
-        receiver: currentReceiver,
+        receiver: currentEntityType === 'user' ? currentReceiver : null,
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
       }).then(() => {
-        console.log("Message sent successfully");
-        input.value = "";
+        input.value = '';
         loadMessages();
       }).catch(error => {
         console.error("Error sending message:", error);
         alert("Failed to send message: " + error.message);
       });
     }
-
-    console.log("App initialized");
-    // Uncomment the next line to reset usernames on load (one-time use)
-    // resetUsernames();
   </script>
 </body>
 </html>
