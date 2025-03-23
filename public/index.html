@@ -1,18 +1,18 @@
 <!DOCTYPE html>
-<html>
+<html dir="rtl" lang="ar">
 <head>
-  <title>Chat</title>
+  <title>دردشة</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="styles.css?v=17">
+  <link rel="stylesheet" href="styles.css?v=18">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
   <div id="authScreen">
     <div class="auth-container">
-      <h1>Chat</h1>
+      <h1>دردشة</h1>
       <button class="google-btn" onclick="signInWithGoogle()">
-        <img src="https://www.google.com/favicon.ico" alt="Google Icon">
-        Sign in with Google
+        <img src="https://www.google.com/favicon.ico" alt="أيقونة جوجل">
+        تسجيل الدخول باستخدام جوجل
       </button>
     </div>
   </div>
@@ -20,24 +20,25 @@
   <div id="chatApp" style="display: none;">
     <div id="userList">
       <div id="userHeader">
-        <img id="userPhoto" alt="Your photo">
+        <img id="userPhoto" alt="صورتك">
         <span id="userName"></span>
-        <button onclick="showProfile()" id="profileBtn">Profile</button>
-        <button onclick="signOut()" id="signOutBtn">Sign Out</button>
+        <button onclick="showProfile()" id="profileBtn">الملف الشخصي</button>
+        <button onclick="signOut()" id="signOutBtn">تسجيل الخروج</button>
       </div>
       <div id="searchContainer">
-        <input id="searchInput" placeholder="Search by username (e.g., 1, 2)..." oninput="searchEntities()">
+        <input id="searchInput" placeholder="ابحث باسم المستخدم (مثل 1، 2)..." oninput="searchEntities()">
         <div id="searchResults"></div>
       </div>
       <div id="contacts"></div>
     </div>
     <div id="chatWindow" style="display: none;">
       <div id="chatHeader">
-        <button class="back-btn" onclick="showUserList()">←</button>
-        <span id="currentChat">Select a contact</span>
-        <button id="callBtn" onclick="startCall()">Call</button>
-        <button id="endCallBtn" onclick="endCall()" style="display: none;">End Call</button>
-        <button id="deleteBtn" onclick="deleteEntity()">Delete</button>
+        <button class="back-btn" onclick="showUserList()">→</button>
+        <span id="currentChat">اختر جهة اتصال</span>
+        <button id="voiceCallBtn" onclick="startVoiceCall()">مكالمة صوتية</button>
+        <button id="videoCallBtn" onclick="startVideoCall()">مكالمة فيديو</button>
+        <button id="endCallBtn" onclick="endCall()" style="display: none;">إنهاء المكالمة</button>
+        <button id="deleteBtn" onclick="deleteEntity()">حذف</button>
       </div>
       <div id="callContainer" style="display: none;">
         <video id="localVideo" autoplay muted playsinline></video>
@@ -45,20 +46,20 @@
       </div>
       <div id="messages"></div>
       <div class="input-container" id="messageInputContainer">
-        <input id="messageInput" placeholder="Type a message..." onkeydown="if (event.key === 'Enter') sendMessage()" />
-        <button onclick="sendMessage()">Send</button>
+        <input id="messageInput" placeholder="اكتب رسالة..." onkeydown="if (event.key === 'Enter') sendMessage()" />
+        <button onclick="sendMessage()">إرسال</button>
       </div>
     </div>
     <div id="profilePage" style="display: none;">
       <div id="profileHeader">
-        <button class="back-btn" onclick="showUserList()">←</button>
-        <h2>Profile</h2>
+        <button class="back-btn" onclick="showUserList()">→</button>
+        <h2>الملف الشخصي</h2>
       </div>
       <div id="profileContent">
-        <img id="profilePhoto" alt="Your photo">
-        <input id="profileName" placeholder="Your Name">
-        <p id="profileUsername">Username: <span id="fixedUsername"></span></p>
-        <button onclick="saveProfile()">Save</button>
+        <img id="profilePhoto" alt="صورتك">
+        <input id="profileName" placeholder="اسمك">
+        <p id="profileUsername">اسم المستخدم: <span id="fixedUsername"></span></p>
+        <button onclick="saveProfile()">حفظ</button>
       </div>
     </div>
   </div>
@@ -91,8 +92,8 @@
     function signInWithGoogle() {
       const provider = new firebase.auth.GoogleAuthProvider();
       return auth.signInWithPopup(provider)
-        .then((result) => console.log("Sign-in successful:", result.user.uid))
-        .catch(error => console.error("Sign-in error:", error));
+        .then((result) => console.log("تسجيل الدخول ناجح:", result.user.uid))
+        .catch(error => console.error("خطأ في تسجيل الدخول:", error));
     }
 
     function signOut() {
@@ -112,7 +113,7 @@
         chatApp.style.display = 'flex';
         userList.classList.add('active');
         document.getElementById('userPhoto').src = user.photoURL || '';
-        document.getElementById('userName').textContent = user.displayName || 'User';
+        document.getElementById('userName').textContent = user.displayName || 'مستخدم';
         checkUserExists(user);
         loadContacts();
       } else {
@@ -127,7 +128,7 @@
         if (!doc.exists) {
           assignUsername(user);
         }
-      }).catch(error => console.error("Error checking user:", error));
+      }).catch(error => console.error("خطأ في التحقق من المستخدم:", error));
     }
 
     function assignUsername(user) {
@@ -148,8 +149,8 @@
           });
           return nextId;
         });
-      }).then(nextId => console.log("User created with username:", nextId))
-        .catch(error => console.error("Error assigning username:", error));
+      }).then(nextId => console.log("تم إنشاء المستخدم باسم المستخدم:", nextId))
+        .catch(error => console.error("خطأ في تعيين اسم المستخدم:", error));
     }
 
     function loadContacts() {
@@ -230,7 +231,7 @@
               `;
             }
           });
-        }).catch(error => console.error("Error searching users:", error));
+        }).catch(error => console.error("خطأ في البحث عن المستخدمين:", error));
     }
 
     function openChat(id, name) {
@@ -241,7 +242,8 @@
       document.getElementById('profilePage').style.display = 'none';
       
       document.getElementById('messageInputContainer').style.display = 'flex';
-      document.getElementById('callBtn').style.display = 'inline';
+      document.getElementById('voiceCallBtn').style.display = 'inline';
+      document.getElementById('videoCallBtn').style.display = 'inline';
       document.getElementById('deleteBtn').style.display = 'inline';
       document.getElementById('endCallBtn').style.display = 'none';
       document.getElementById('callContainer').style.display = 'none';
@@ -273,13 +275,13 @@
         document.getElementById('profilePhoto').src = data.photoURL || '';
         document.getElementById('profileName').value = data.displayName || '';
         document.getElementById('fixedUsername').textContent = data.username;
-      }).catch(error => console.error("Error loading profile:", error));
+      }).catch(error => console.error("خطأ في تحميل الملف الشخصي:", error));
     }
 
     function saveProfile() {
       const name = document.getElementById('profileName').value.trim();
       if (!name) {
-        alert("Name cannot be empty");
+        alert("الاسم لا يمكن أن يكون فارغًا");
         return;
       }
       const userRef = db.collection('users').doc(currentUser.uid);
@@ -287,24 +289,24 @@
         document.getElementById('userName').textContent = name;
         showUserList();
         loadContacts();
-      }).catch(error => console.error("Error updating profile:", error));
+      }).catch(error => console.error("خطأ في تحديث الملف الشخصي:", error));
     }
 
     function deleteEntity() {
       if (!currentReceiver) return;
-      if (!confirm(`Are you sure you want to delete chat with ${currentReceiver}?`)) return;
+      if (!confirm(`هل أنت متأكد من حذف الدردشة مع ${currentReceiver}؟`)) return;
       
       const chatId = [currentUser.uid, currentReceiver].sort().join('_');
       db.collection('chats').doc(chatId).delete().then(() => {
-        console.log(`Deleted chat: ${chatId}`);
+        console.log(`تم حذف الدردشة: ${chatId}`);
         showUserList();
         loadContacts();
-      }).catch(error => console.error("Error deleting chat:", error));
+      }).catch(error => console.error("خطأ في حذف الدردشة:", error));
     }
 
-    async function startCall() {
+    async function startCall(isVideo) {
       if (!currentReceiver) {
-        alert("Please select a contact to call.");
+        alert("يرجى اختيار جهة اتصال للمكالمة.");
         return;
       }
 
@@ -312,10 +314,11 @@
       const callDocRef = db.collection('calls').doc(chatId);
 
       try {
-        localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: isVideo });
         document.getElementById('localVideo').srcObject = localStream;
-        document.getElementById('callContainer').style.display = 'flex';
-        document.getElementById('callBtn').style.display = 'none';
+        document.getElementById('callContainer').style.display = isVideo ? 'flex' : 'none';
+        document.getElementById('voiceCallBtn').style.display = 'none';
+        document.getElementById('videoCallBtn').style.display = 'none';
         document.getElementById('endCallBtn').style.display = 'inline';
 
         peerConnection = new RTCPeerConnection(servers);
@@ -336,7 +339,8 @@
         await callDocRef.set({
           offer: { type: offer.type, sdp: offer.sdp },
           caller: currentUser.uid,
-          receiver: currentReceiver
+          receiver: currentReceiver,
+          isVideo: isVideo
         }, { merge: true });
 
         callDocRef.onSnapshot(async snapshot => {
@@ -356,10 +360,18 @@
           });
         });
       } catch (error) {
-        console.error("Error starting call:", error);
-        alert("Failed to start call: " + error.message);
+        console.error("خطأ في بدء المكالمة:", error);
+        alert("فشل في بدء المكالمة: " + error.message);
         endCall();
       }
+    }
+
+    function startVoiceCall() {
+      startCall(false); // Audio only
+    }
+
+    function startVideoCall() {
+      startCall(true); // Audio + Video
     }
 
     function setupIncomingCallListener(chatId) {
@@ -367,11 +379,13 @@
       callDocRef.onSnapshot(async snapshot => {
         const data = snapshot.data();
         if (data && data.offer && !peerConnection && data.receiver === currentUser.uid) {
-          if (confirm(`${data.caller} is calling you. Accept?`)) {
-            localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+          const callType = data.isVideo ? "فيديو" : "صوتية";
+          if (confirm(`${data.caller} يتصل بك (${callType}). قبول؟`)) {
+            localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: data.isVideo });
             document.getElementById('localVideo').srcObject = localStream;
-            document.getElementById('callContainer').style.display = 'flex';
-            document.getElementById('callBtn').style.display = 'none';
+            document.getElementById('callContainer').style.display = data.isVideo ? 'flex' : 'none';
+            document.getElementById('voiceCallBtn').style.display = 'none';
+            document.getElementById('videoCallBtn').style.display = 'none';
             document.getElementById('endCallBtn').style.display = 'inline';
 
             peerConnection = new RTCPeerConnection(servers);
@@ -421,7 +435,8 @@
       document.getElementById('localVideo').srcObject = null;
       document.getElementById('remoteVideo').srcObject = null;
       document.getElementById('callContainer').style.display = 'none';
-      document.getElementById('callBtn').style.display = 'inline';
+      document.getElementById('voiceCallBtn').style.display = 'inline';
+      document.getElementById('videoCallBtn').style.display = 'inline';
       document.getElementById('endCallBtn').style.display = 'none';
 
       const chatId = currentReceiver ? [currentUser.uid, currentReceiver].sort().join('_') : null;
@@ -446,7 +461,7 @@
             <div class="message ${isYou ? 'you' : 'others'}">
               ${msg.text}
               <span class="timestamp">
-                ${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}
+                ${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' }) : 'جاري الإرسال...'}
               </span>
             </div>
           `;
@@ -457,7 +472,7 @@
 
     function sendMessage() {
       if (!currentReceiver) {
-        alert("Please select a contact.");
+        alert("يرجى اختيار جهة اتصال.");
         return;
       }
       const input = document.getElementById('messageInput');
@@ -475,7 +490,7 @@
       }).then(() => {
         input.value = '';
         loadMessages();
-      }).catch(error => console.error("Error sending message:", error));
+      }).catch(error => console.error("خطأ في إرسال الرسالة:", error));
     }
   </script>
 </body>

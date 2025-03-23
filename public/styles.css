@@ -11,6 +11,8 @@ body {
   overflow: hidden;
   font-size: 16px;
   color: #fff;
+  direction: rtl;
+  text-align: right;
 }
 
 #authScreen {
@@ -90,7 +92,7 @@ body {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  margin-right: 10px;
+  margin-left: 10px;
 }
 
 #userName {
@@ -107,7 +109,7 @@ body {
   border-radius: 16px;
   font-size: 14px;
   cursor: pointer;
-  margin-right: 10px;
+  margin-left: 10px;
 }
 
 #profileBtn {
@@ -156,7 +158,7 @@ body {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  margin-right: 10px;
+  margin-left: 10px;
 }
 
 .search-item span {
@@ -189,7 +191,7 @@ body {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  margin-right: 10px;
+  margin-left: 10px;
 }
 
 .contact-item .contact-name {
@@ -201,7 +203,7 @@ body {
 .contact-item .notification {
   font-size: 12px;
   color: #1d9bf0;
-  margin-left: 10px;
+  margin-right: 10px;
   max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -230,7 +232,7 @@ body {
   font-size: 20px;
   color: #fff;
   cursor: pointer;
-  margin-right: 10px;
+  margin-left: 10px;
 }
 
 #currentChat {
@@ -240,7 +242,7 @@ body {
   flex-grow: 1;
 }
 
-#callBtn, #endCallBtn, #deleteBtn {
+#voiceCallBtn, #videoCallBtn, #endCallBtn, #deleteBtn {
   padding: 6px 12px;
   background: #1d9bf0;
   color: white;
@@ -249,6 +251,10 @@ body {
   font-size: 14px;
   cursor: pointer;
   margin-left: 10px;
+}
+
+#videoCallBtn {
+  background: #4caf50; /* Green for video call */
 }
 
 #endCallBtn {
@@ -277,7 +283,7 @@ body {
 }
 
 #localVideo {
-  max-height: 150px; /* Smaller local video */
+  max-height: 150px;
 }
 
 #messages {
@@ -301,15 +307,15 @@ body {
 .message.you {
   background: #1d9bf0;
   color: white;
-  align-self: flex-end;
-  border-bottom-right-radius: 4px;
+  align-self: flex-start;
+  border-bottom-left-radius: 4px;
 }
 
 .message.others {
   background: #333;
   color: #fff;
-  align-self: flex-start;
-  border-bottom-left-radius: 4px;
+  align-self: flex-end;
+  border-bottom-right-radius: 4px;
 }
 
 .timestamp {
@@ -390,7 +396,7 @@ button[onclick="sendMessage()"]:hover {
   font-size: 20px;
   color: #fff;
   cursor: pointer;
-  margin-right: 10px;
+  margin-left: 10px;
 }
 
 #profileHeader h2 {
