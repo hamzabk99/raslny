@@ -3,7 +3,7 @@
 <head>
   <title>Chat</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="styles.css?v=16">
+  <link rel="stylesheet" href="styles.css?v=17">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
@@ -36,7 +36,12 @@
         <button class="back-btn" onclick="showUserList()">←</button>
         <span id="currentChat">Select a contact</span>
         <button id="callBtn" onclick="startCall()">Call</button>
+        <button id="endCallBtn" onclick="endCall()" style="display: none;">End Call</button>
         <button id="deleteBtn" onclick="deleteEntity()">Delete</button>
+      </div>
+      <div id="callContainer" style="display: none;">
+        <video id="localVideo" autoplay muted playsinline></video>
+        <video id="remoteVideo" autoplay playsinline></video>
       </div>
       <div id="messages"></div>
       <div class="input-container" id="messageInputContainer">
@@ -77,6 +82,11 @@
     const auth = firebase.auth();
     let currentUser = null;
     let currentReceiver = null;
+    let localStream = null;
+    let peerConnection = null;
+    const servers = {
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    };
 
     function signInWithGoogle() {
       const provider = new firebase.auth.GoogleAuthProvider();
@@ -86,6 +96,7 @@
     }
 
     function signOut() {
+      endCall();
       auth.signOut();
       window.location.reload();
     }
@@ -232,13 +243,17 @@
       document.getElementById('messageInputContainer').style.display = 'flex';
       document.getElementById('callBtn').style.display = 'inline';
       document.getElementById('deleteBtn').style.display = 'inline';
+      document.getElementById('endCallBtn').style.display = 'none';
+      document.getElementById('callContainer').style.display = 'none';
       
       loadMessages();
+      setupIncomingCallListener([currentUser.uid, currentReceiver].sort().join('_'));
       const notifElement = document.getElementById(`notif-${id}`);
       if (notifElement) notifElement.textContent = '';
     }
 
     function showUserList() {
+      endCall();
       document.getElementById('userList').classList.add('active');
       document.getElementById('chatWindow').style.display = 'none';
       document.getElementById('profilePage').style.display = 'none';
@@ -246,6 +261,7 @@
     }
 
     function showProfile() {
+      endCall();
       document.getElementById('userList').classList.remove('active');
       document.getElementById('chatWindow').style.display = 'none';
       const profilePage = document.getElementById('profilePage');
@@ -286,8 +302,132 @@
       }).catch(error => console.error("Error deleting chat:", error));
     }
 
-    function startCall() {
-      alert(`Simulating call to ${currentReceiver}. Real calling requires WebRTC setup.`);
+    async function startCall() {
+      if (!currentReceiver) {
+        alert("Please select a contact to call.");
+        return;
+      }
+
+      const chatId = [currentUser.uid, currentReceiver].sort().join('_');
+      const callDocRef = db.collection('calls').doc(chatId);
+
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        document.getElementById('localVideo').srcObject = localStream;
+        document.getElementById('callContainer').style.display = 'flex';
+        document.getElementById('callBtn').style.display = 'none';
+        document.getElementById('endCallBtn').style.display = 'inline';
+
+        peerConnection = new RTCPeerConnection(servers);
+        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+        peerConnection.onicecandidate = event => {
+          if (event.candidate) {
+            callDocRef.collection('callerCandidates').add(event.candidate.toJSON());
+          }
+        };
+
+        peerConnection.ontrack = event => {
+          document.getElementById('remoteVideo').srcObject = event.streams[0];
+        };
+
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        await callDocRef.set({
+          offer: { type: offer.type, sdp: offer.sdp },
+          caller: currentUser.uid,
+          receiver: currentReceiver
+        }, { merge: true });
+
+        callDocRef.onSnapshot(async snapshot => {
+          const data = snapshot.data();
+          if (!peerConnection.currentRemoteDescription && data?.answer) {
+            const answer = new RTCSessionDescription(data.answer);
+            await peerConnection.setRemoteDescription(answer);
+          }
+        });
+
+        callDocRef.collection('receiverCandidates').onSnapshot(snapshot => {
+          snapshot.docChanges().forEach(change => {
+            if (change.type === 'added') {
+              const candidate = new RTCIceCandidate(change.doc.data());
+              peerConnection.addIceCandidate(candidate);
+            }
+          });
+        });
+      } catch (error) {
+        console.error("Error starting call:", error);
+        alert("Failed to start call: " + error.message);
+        endCall();
+      }
+    }
+
+    function setupIncomingCallListener(chatId) {
+      const callDocRef = db.collection('calls').doc(chatId);
+      callDocRef.onSnapshot(async snapshot => {
+        const data = snapshot.data();
+        if (data && data.offer && !peerConnection && data.receiver === currentUser.uid) {
+          if (confirm(`${data.caller} is calling you. Accept?`)) {
+            localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+            document.getElementById('localVideo').srcObject = localStream;
+            document.getElementById('callContainer').style.display = 'flex';
+            document.getElementById('callBtn').style.display = 'none';
+            document.getElementById('endCallBtn').style.display = 'inline';
+
+            peerConnection = new RTCPeerConnection(servers);
+            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+            peerConnection.onicecandidate = event => {
+              if (event.candidate) {
+                callDocRef.collection('receiverCandidates').add(event.candidate.toJSON());
+              }
+            };
+
+            peerConnection.ontrack = event => {
+              document.getElementById('remoteVideo').srcObject = event.streams[0];
+            };
+
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            await callDocRef.update({
+              answer: { type: answer.type, sdp: answer.sdp }
+            });
+
+            callDocRef.collection('callerCandidates').onSnapshot(snapshot => {
+              snapshot.docChanges().forEach(change => {
+                if (change.type === 'added') {
+                  const candidate = new RTCIceCandidate(change.doc.data());
+                  peerConnection.addIceCandidate(candidate);
+                }
+              });
+            });
+          } else {
+            callDocRef.update({ rejected: true });
+          }
+        }
+      });
+    }
+
+    function endCall() {
+      if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+      }
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+      document.getElementById('localVideo').srcObject = null;
+      document.getElementById('remoteVideo').srcObject = null;
+      document.getElementById('callContainer').style.display = 'none';
+      document.getElementById('callBtn').style.display = 'inline';
+      document.getElementById('endCallBtn').style.display = 'none';
+
+      const chatId = currentReceiver ? [currentUser.uid, currentReceiver].sort().join('_') : null;
+      if (chatId) {
+        db.collection('calls').doc(chatId).delete();
+      }
     }
 
     function loadMessages() {
