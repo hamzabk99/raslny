@@ -43,11 +43,6 @@
         <input id="messageInput" placeholder="Type a message..." onkeydown="if (event.key === 'Enter') sendMessage()" />
         <button onclick="sendMessage()">Send</button>
       </div>
-      <!-- Video call container -->
-      <div id="videoContainer" style="display: none;">
-        <video id="localVideo" autoplay muted></video>
-        <video id="remoteVideo" autoplay></video>
-      </div>
     </div>
     <div id="profilePage" style="display: none;">
       <div id="profileHeader">
@@ -82,14 +77,6 @@
     const auth = firebase.auth();
     let currentUser = null;
     let currentReceiver = null;
-    
-    // WebRTC variables
-    let peerConnection;
-    const configuration = {
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-    };
-    let localStream;
-    let remoteStream;
 
     function signInWithGoogle() {
       const provider = new firebase.auth.GoogleAuthProvider();
@@ -99,13 +86,6 @@
     }
 
     function signOut() {
-      // Stop all media tracks when signing out
-      if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-      }
-      if (remoteStream) {
-        remoteStream.getTracks().forEach(track => track.stop());
-      }
       auth.signOut();
       window.location.reload();
     }
@@ -124,150 +104,239 @@
         document.getElementById('userName').textContent = user.displayName || 'User';
         checkUserExists(user);
         loadContacts();
-
-        // Listen for incoming calls
-        db.collection('calls').doc(user.uid).onSnapshot(async (snapshot) => {
-          const data = snapshot.data();
-          if (!data || data.from === user.uid) return;
-
-          if (confirm(`Incoming call from ${data.from}. Accept?`)) {
-            await handleIncomingCall(data);
-          } else {
-            db.collection('calls').doc(user.uid).delete();
-          }
-        });
-
       } else {
         authScreen.style.display = 'flex';
         chatApp.style.display = 'none';
       }
     });
 
-    // ... [Keep all the existing functions from your original code unchanged] ...
-
-    async function startCall() {
-      try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        document.getElementById('localVideo').srcObject = localStream;
-        document.getElementById('videoContainer').style.display = 'block';
-
-        peerConnection = new RTCPeerConnection(configuration);
-
-        // Setup ice candidate handling
-        peerConnection.onicecandidate = async (event) => {
-          if (event.candidate) {
-            await db.collection('calls').doc(currentReceiver).collection('candidates').add({
-              candidate: JSON.stringify(event.candidate),
-              sender: currentUser.uid
-            });
-          }
-        };
-
-        peerConnection.ontrack = (event) => {
-          remoteStream = event.streams[0];
-          document.getElementById('remoteVideo').srcObject = remoteStream;
-        };
-
-        localStream.getTracks().forEach(track => {
-          peerConnection.addTrack(track, localStream);
-        });
-
-        // Create offer
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        
-        await db.collection('calls').doc(currentReceiver).set({
-          offer: JSON.stringify(offer),
-          from: currentUser.uid
-        });
-
-        listenForAnswer();
-      } catch (error) {
-        console.error('Error starting call:', error);
-      }
+    function checkUserExists(user) {
+      const userRef = db.collection('users').doc(user.uid);
+      userRef.get().then(doc => {
+        if (!doc.exists) {
+          assignUsername(user);
+        }
+      }).catch(error => console.error("Error checking user:", error));
     }
 
-    async function listenForAnswer() {
-      const callRef = db.collection('calls').doc(currentUser.uid);
-      
-      callRef.onSnapshot(async (snapshot) => {
-        const data = snapshot.data();
-        if (!data || !data.answer) return;
+    function assignUsername(user) {
+      const counterRef = db.collection('metadata').doc('userCounter');
+      db.runTransaction(transaction => {
+        return transaction.get(counterRef).then(counterDoc => {
+          let nextId = 1;
+          if (counterDoc.exists) nextId = counterDoc.data().count + 1;
+          transaction.set(counterRef, { count: nextId }, { merge: true });
+          transaction.set(userRef, {
+            uid: user.uid,
+            displayName: user.displayName,
+            username: nextId.toString(),
+            email: user.email,
+            photoURL: user.photoURL,
+            following: [],
+            lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          return nextId;
+        });
+      }).then(nextId => console.log("User created with username:", nextId))
+        .catch(error => console.error("Error assigning username:", error));
+    }
 
-        const answer = JSON.parse(data.answer);
-        if (!peerConnection.currentRemoteDescription) {
-          await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-        }
-        callRef.delete();
+    function loadContacts() {
+      const contactsDiv = document.getElementById('contacts');
+      contactsDiv.innerHTML = '';
+      const seenIds = new Set();
+
+      db.collection('users').doc(currentUser.uid).onSnapshot(doc => {
+        const following = doc.data().following || [];
+        following.forEach(followId => {
+          seenIds.add(followId);
+          db.collection('users').doc(followId).get().then(followDoc => {
+            if (followDoc.exists) addContact(followDoc.data(), contactsDiv);
+          });
+        });
       });
 
-      // Listen for ICE candidates
-      db.collection('calls').doc(currentUser.uid).collection('candidates')
-        .onSnapshot(snapshot => {
-          snapshot.docChanges().forEach(async change => {
+      db.collectionGroup('messages').where('receiver', '==', currentUser.uid)
+        .orderBy('timestamp').onSnapshot(snapshot => {
+          snapshot.docChanges().forEach(change => {
             if (change.type === 'added') {
-              const data = change.doc.data();
-              if (data.sender === currentReceiver) {
-                const candidate = JSON.parse(data.candidate);
-                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+              const msg = change.doc.data();
+              const senderId = msg.sender;
+              if (!seenIds.has(senderId)) {
+                seenIds.add(senderId);
+                db.collection('users').doc(senderId).get().then(senderDoc => {
+                  if (senderDoc.exists) {
+                    addContact(senderDoc.data(), contactsDiv);
+                    updateNotification(senderId, msg.text);
+                  }
+                });
+              } else {
+                updateNotification(senderId, msg.text);
               }
             }
           });
         });
     }
 
-    async function handleIncomingCall(data) {
-      try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        document.getElementById('localVideo').srcObject = localStream;
-        document.getElementById('videoContainer').style.display = 'block';
-
-        peerConnection = new RTCPeerConnection(configuration);
-
-        peerConnection.onicecandidate = async (event) => {
-          if (event.candidate) {
-            await db.collection('calls').doc(data.from).collection('candidates').add({
-              candidate: JSON.stringify(event.candidate),
-              sender: currentUser.uid
-            });
-          }
-        };
-
-        peerConnection.ontrack = (event) => {
-          remoteStream = event.streams[0];
-          document.getElementById('remoteVideo').srcObject = remoteStream;
-        };
-
-        localStream.getTracks().forEach(track => {
-          peerConnection.addTrack(track, localStream);
-        });
-
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(data.offer)));
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-
-        await db.collection('calls').doc(data.from).set({
-          answer: JSON.stringify(answer)
-        });
-
-        // Listen for ICE candidates
-        db.collection('calls').doc(data.from).collection('candidates')
-          .onSnapshot(snapshot => {
-            snapshot.docChanges().forEach(async change => {
-              if (change.type === 'added') {
-                const candidateData = change.doc.data();
-                if (candidateData.sender === data.from) {
-                  const candidate = JSON.parse(candidateData.candidate);
-                  await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-                }
-              }
-            });
-          });
-      } catch (error) {
-        console.error('Error handling incoming call:', error);
+    function addContact(data, container) {
+      const id = data.uid;
+      if (!document.querySelector(`.contact-item[data-id="${id}"]`)) {
+        container.innerHTML += `
+          <div class="contact-item" data-id="${id}" onclick="openChat('${id}', '${data.displayName}')">
+            <img src="${data.photoURL || 'data:,'}" onerror="this.src='data:,'">
+            <span class="contact-name">${data.displayName} (@${data.username})</span>
+            <span class="notification" id="notif-${id}"></span>
+          </div>
+        `;
       }
     }
-  </script>
 
+    function updateNotification(id, text) {
+      const notifElement = document.getElementById(`notif-${id}`);
+      if (notifElement && id !== currentReceiver) {
+        const preview = text.length > 20 ? text.substring(0, 20) + '...' : text;
+        notifElement.textContent = preview;
+      }
+    }
+
+    function searchEntities() {
+      const query = document.getElementById('searchInput').value.trim();
+      const searchResults = document.getElementById('searchResults');
+      searchResults.innerHTML = '';
+      
+      if (!query) return;
+
+      db.collection('users').where('username', '==', query).get()
+        .then(snapshot => {
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.uid !== currentUser.uid) {
+              searchResults.innerHTML += `
+                <div class="search-item" onclick="openChat('${data.uid}', '${data.displayName}')">
+                  <img src="${data.photoURL || 'data:,'}" onerror="this.src='data:,'">
+                  <span>${data.displayName} (@${data.username})</span>
+                </div>
+              `;
+            }
+          });
+        }).catch(error => console.error("Error searching users:", error));
+    }
+
+    function openChat(id, name) {
+      currentReceiver = id;
+      document.getElementById('currentChat').textContent = name;
+      document.getElementById('userList').classList.remove('active');
+      document.getElementById('chatWindow').style.display = 'flex';
+      document.getElementById('profilePage').style.display = 'none';
+      
+      document.getElementById('messageInputContainer').style.display = 'flex';
+      document.getElementById('callBtn').style.display = 'inline';
+      document.getElementById('deleteBtn').style.display = 'inline';
+      
+      loadMessages();
+      const notifElement = document.getElementById(`notif-${id}`);
+      if (notifElement) notifElement.textContent = '';
+    }
+
+    function showUserList() {
+      document.getElementById('userList').classList.add('active');
+      document.getElementById('chatWindow').style.display = 'none';
+      document.getElementById('profilePage').style.display = 'none';
+      currentReceiver = null;
+    }
+
+    function showProfile() {
+      document.getElementById('userList').classList.remove('active');
+      document.getElementById('chatWindow').style.display = 'none';
+      const profilePage = document.getElementById('profilePage');
+      profilePage.style.display = 'flex';
+      
+      const userRef = db.collection('users').doc(currentUser.uid);
+      userRef.get().then(doc => {
+        const data = doc.data();
+        document.getElementById('profilePhoto').src = data.photoURL || '';
+        document.getElementById('profileName').value = data.displayName || '';
+        document.getElementById('fixedUsername').textContent = data.username;
+      }).catch(error => console.error("Error loading profile:", error));
+    }
+
+    function saveProfile() {
+      const name = document.getElementById('profileName').value.trim();
+      if (!name) {
+        alert("Name cannot be empty");
+        return;
+      }
+      const userRef = db.collection('users').doc(currentUser.uid);
+      userRef.update({ displayName: name }).then(() => {
+        document.getElementById('userName').textContent = name;
+        showUserList();
+        loadContacts();
+      }).catch(error => console.error("Error updating profile:", error));
+    }
+
+    function deleteEntity() {
+      if (!currentReceiver) return;
+      if (!confirm(`Are you sure you want to delete chat with ${currentReceiver}?`)) return;
+      
+      const chatId = [currentUser.uid, currentReceiver].sort().join('_');
+      db.collection('chats').doc(chatId).delete().then(() => {
+        console.log(`Deleted chat: ${chatId}`);
+        showUserList();
+        loadContacts();
+      }).catch(error => console.error("Error deleting chat:", error));
+    }
+
+    function startCall() {
+      alert(`Simulating call to ${currentReceiver}. Real calling requires WebRTC setup.`);
+    }
+
+    function loadMessages() {
+      if (!currentReceiver) return;
+      
+      const chatId = [currentUser.uid, currentReceiver].sort().join('_');
+      const messagesRef = db.collection(`chats/${chatId}/messages`);
+      
+      messagesRef.orderBy('timestamp').onSnapshot(snapshot => {
+        const messagesDiv = document.getElementById('messages');
+        messagesDiv.innerHTML = '';
+        snapshot.forEach(doc => {
+          const msg = doc.data();
+          const isYou = msg.sender === currentUser.uid;
+          messagesDiv.innerHTML += `
+            <div class="message ${isYou ? 'you' : 'others'}">
+              ${msg.text}
+              <span class="timestamp">
+                ${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Sending...'}
+              </span>
+            </div>
+          `;
+        });
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      });
+    }
+
+    function sendMessage() {
+      if (!currentReceiver) {
+        alert("Please select a contact.");
+        return;
+      }
+      const input = document.getElementById('messageInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const chatId = [currentUser.uid, currentReceiver].sort().join('_');
+      const messagesRef = db.collection(`chats/${chatId}/messages`);
+
+      messagesRef.add({
+        text: text,
+        sender: currentUser.uid,
+        receiver: currentReceiver,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      }).then(() => {
+        input.value = '';
+        loadMessages();
+      }).catch(error => console.error("Error sending message:", error));
+    }
+  </script>
 </body>
 </html>
