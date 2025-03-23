@@ -393,6 +393,11 @@ button[onclick="sendMessage()"]:hover {
   align-self: center;
 }
 
+#photoUpload {
+  align-self: center;
+  color: #fff;
+}
+
 #profileName, #profileUsername {
   padding: 10px;
   border: 1px solid #444;

@@ -3,7 +3,7 @@
 <head>
   <title>Chat</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="styles.css?v=10">
+  <link rel="stylesheet" href="styles.css?v=11">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
@@ -49,6 +49,7 @@
       </div>
       <div id="profileContent">
         <img id="profilePhoto" alt="Your photo">
+        <input type="file" id="photoUpload" accept="image/*">
         <input id="profileName" placeholder="Your Name">
         <input id="profileUsername" placeholder="Your Username">
         <button onclick="saveProfile()">Save</button>
@@ -59,6 +60,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-storage-compat.js"></script>
 
   <script>
     const firebaseConfig = {
@@ -73,6 +75,7 @@
     const app = firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
+    const storage = firebase.storage();
     let currentUser = null;
     let currentReceiver = null;
 
@@ -104,7 +107,7 @@
         console.log("User signed in:", user.uid);
         authScreen.style.display = 'none';
         chatApp.style.display = 'flex';
-        userList.classList.add('active'); // Ensure user list is visible
+        userList.classList.add('active');
         document.getElementById('userPhoto').src = user.photoURL || '';
         document.getElementById('userName').textContent = user.displayName || 'User';
         checkUserExists(user);
@@ -124,7 +127,7 @@
           userRef.set({
             uid: user.uid,
             displayName: user.displayName,
-            username: user.email.split('@')[0],
+            username: user.email.split('@')[0].toLowerCase(),
             email: user.email,
             photoURL: user.photoURL,
             following: [],
@@ -150,22 +153,26 @@
           const following = doc.data().following || [];
           const usersDiv = document.getElementById('users');
           usersDiv.innerHTML = following.length ? '' : '<p>No one followed yet.</p>';
-          
+          const seenIds = new Set();
+
           following.forEach(followId => {
-            db.collection('users').doc(followId).get().then(followDoc => {
-              if (followDoc.exists) {
-                const user = followDoc.data();
-                usersDiv.innerHTML += `
-                  <div class="user-item" onclick="openChat('${user.uid}', '${user.displayName}')">
-                    <img src="${user.photoURL}" onerror="this.src='data:,'">
-                    <span class="user-name">${user.displayName} (@${user.username})</span>
-                    <span class="notification" id="notif-${user.uid}"></span>
-                  </div>
-                `;
-              }
-            }).catch(error => {
-              console.error("Error fetching followed user:", error);
-            });
+            if (!seenIds.has(followId)) {
+              seenIds.add(followId);
+              db.collection('users').doc(followId).get().then(followDoc => {
+                if (followDoc.exists) {
+                  const user = followDoc.data();
+                  usersDiv.innerHTML += `
+                    <div class="user-item" onclick="openChat('${user.uid}', '${user.displayName}')">
+                      <img src="${user.photoURL}" onerror="this.src='data:,'">
+                      <span class="user-name">${user.displayName} (@${user.username})</span>
+                      <span class="notification" id="notif-${user.uid}"></span>
+                    </div>
+                  `;
+                }
+              }).catch(error => {
+                console.error("Error fetching followed user:", error);
+              });
+            }
           });
           listenForNotifications();
         } else {
@@ -191,6 +198,9 @@
         .limit(5)
         .get()
         .then(snapshot => {
+          if (snapshot.empty) {
+            searchResults.innerHTML = '<p>No users found.</p>';
+          }
           snapshot.forEach(doc => {
             const user = doc.data();
             if (user.uid !== currentUser.uid) {
@@ -205,6 +215,7 @@
           });
         }).catch(error => {
           console.error("Error searching users:", error);
+          searchResults.innerHTML = '<p>Error searching users.</p>';
         });
     }
 
@@ -263,7 +274,9 @@
 
     function saveProfile() {
       const name = document.getElementById('profileName').value.trim();
-      const username = document.getElementById('profileUsername').value.trim();
+      const username = document.getElementById('profileUsername').value.trim().toLowerCase();
+      const file = document.getElementById('photoUpload').files[0];
+      
       if (!name || !username) {
         alert("Name and username cannot be empty");
         return;
@@ -271,17 +284,31 @@
       
       console.log("Saving profile:", { name, username });
       const userRef = db.collection('users').doc(currentUser.uid);
-      userRef.update({
-        displayName: name,
-        username: username,
-        photoURL: document.getElementById('profilePhoto').src
-      }).then(() => {
+      
+      if (file) {
+        const storageRef = storage.ref(`profilePhotos/${currentUser.uid}`);
+        storageRef.put(file).then(snapshot => {
+          snapshot.ref.getDownloadURL().then(url => {
+            updateProfile(userRef, { displayName: name, username, photoURL: url });
+          });
+        }).catch(error => {
+          console.error("Error uploading photo:", error);
+        });
+      } else {
+        updateProfile(userRef, { displayName: name, username, photoURL: document.getElementById('profilePhoto').src });
+      }
+    }
+
+    function updateProfile(userRef, data) {
+      userRef.update(data).then(() => {
         console.log("Profile updated successfully");
-        document.getElementById('userName').textContent = name;
-        document.getElementById('userPhoto').src = document.getElementById('profilePhoto').src;
+        document.getElementById('userName').textContent = data.displayName;
+        document.getElementById('userPhoto').src = data.photoURL;
         showUserList();
+        loadFollowing(); // Refresh list to reflect changes
       }).catch(error => {
         console.error("Error updating profile:", error);
+        alert("Failed to update profile: " + error.message);
       });
     }
 
