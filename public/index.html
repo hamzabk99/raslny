@@ -3,7 +3,7 @@
 <head>
   <title>Chat</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="styles.css?v=8">
+  <link rel="stylesheet" href="styles.css?v=9">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
@@ -22,11 +22,16 @@
       <div id="userHeader">
         <img id="userPhoto" alt="Your photo">
         <span id="userName"></span>
+        <button onclick="showProfile()" id="profileBtn">Profile</button>
         <button onclick="signOut()" id="signOutBtn">Sign Out</button>
+      </div>
+      <div id="searchContainer">
+        <input id="searchInput" placeholder="Search by username..." oninput="searchUsers()">
+        <div id="searchResults"></div>
       </div>
       <div id="users"></div>
     </div>
-    <div id="chatWindow">
+    <div id="chatWindow" style="display: none;">
       <div id="chatHeader">
         <button class="back-btn" onclick="showUserList()">←</button>
         <span id="currentChat">Select a contact</span>
@@ -37,12 +42,23 @@
         <button onclick="sendMessage()">Send</button>
       </div>
     </div>
+    <div id="profilePage" style="display: none;">
+      <div id="profileHeader">
+        <button class="back-btn" onclick="showUserList()">←</button>
+        <h2>Profile</h2>
+      </div>
+      <div id="profileContent">
+        <img id="profilePhoto" alt="Your photo">
+        <input id="profileName" placeholder="Your Name">
+        <input id="profileUsername" placeholder="Your Username">
+        <button onclick="saveProfile()">Save</button>
+      </div>
+    </div>
   </div>
 
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js"></script>
 
   <script>
     const firebaseConfig = {
@@ -57,7 +73,6 @@
     const app = firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
-    const messaging = firebase.messaging();
     let currentUser = null;
     let currentReceiver = null;
 
@@ -67,7 +82,6 @@
       return auth.signInWithPopup(provider)
         .then((result) => {
           console.log("Sign-in successful:", result.user.uid);
-          initializeMessaging();
         })
         .catch(error => {
           console.error("Sign-in error:", error.code, error.message);
@@ -78,55 +92,6 @@
     function signOut() {
       auth.signOut();
       window.location.reload();
-    }
-
-    function initializeMessaging() {
-      console.log("Initializing Firebase Messaging...");
-      messaging.getToken({ 
-        vapidKey: "BBCYNtktuyTzNTOAieesCzOBDqpmUlTtnI5AfEepWeOIy9uxfcpUYsqwN90ABjNpORGq7jf4mcVi1LyZYxIp4-po" 
-      }).then((token) => {
-        if (token) {
-          console.log("FCM Token received:", token);
-          saveTokenToFirestore(token);
-        } else {
-          console.log("No FCM token available. Permission denied or not supported?");
-          requestNotificationPermission();
-        }
-      }).catch((error) => {
-        console.error("Error getting FCM token:", error);
-        requestNotificationPermission();
-      });
-
-      messaging.onMessage((payload) => {
-        console.log("Foreground message received:", payload);
-        const notifElement = document.getElementById(`notif-${payload.data.sender}`);
-        if (notifElement && payload.data.sender !== currentReceiver) {
-          notifElement.textContent = payload.notification.body.length > 20 ? payload.notification.body.substring(0, 20) + '...' : payload.notification.body;
-        }
-      });
-    }
-
-    function requestNotificationPermission() {
-      Notification.requestPermission().then(permission => {
-        if (permission === "granted") {
-          console.log("Notification permission granted");
-          initializeMessaging(); // Retry getting token
-        } else {
-          console.log("Notification permission denied");
-        }
-      });
-    }
-
-    function saveTokenToFirestore(token) {
-      const userRef = db.collection('users').doc(currentUser.uid);
-      userRef.update({
-        fcmToken: token,
-        lastSeen: firebase.firestore.FieldValue.serverTimestamp()
-      }).then(() => {
-        console.log("FCM token saved to Firestore");
-      }).catch(error => {
-        console.error("Error saving FCM token:", error);
-      });
     }
 
     auth.onAuthStateChanged(user => {
@@ -141,7 +106,7 @@
         document.getElementById('userName').textContent = user.displayName || 'User';
         console.log("Current user signed in:", currentUser.uid);
         checkUserExists(user);
-        loadUsers();
+        loadFollowing();
       } else {
         console.log("No user signed in, showing auth screen");
         authScreen.style.display = 'flex';
@@ -156,8 +121,10 @@
           userRef.set({
             uid: user.uid,
             displayName: user.displayName,
+            username: user.email.split('@')[0], // Default username from email
             email: user.email,
             photoURL: user.photoURL,
+            following: [],
             lastSeen: firebase.firestore.FieldValue.serverTimestamp()
           }).catch(error => {
             console.error("Error creating user:", error);
@@ -168,26 +135,74 @@
       });
     }
 
-    function loadUsers() {
-      db.collection('users').onSnapshot(snapshot => {
+    function loadFollowing() {
+      const userRef = db.collection('users').doc(currentUser.uid);
+      userRef.onSnapshot(doc => {
+        const following = doc.data().following || [];
         const usersDiv = document.getElementById('users');
         usersDiv.innerHTML = '';
         
-        snapshot.forEach(doc => {
-          const user = doc.data();
-          if (user.uid !== currentUser.uid) {
-            usersDiv.innerHTML += `
-              <div class="user-item" onclick="openChat('${user.uid}', '${user.displayName}')">
-                <img src="${user.photoURL}" onerror="this.src='data:,'">
-                <span class="user-name">${user.displayName}</span>
-                <span class="notification" id="notif-${user.uid}"></span>
-              </div>
-            `;
-          }
+        following.forEach(followId => {
+          db.collection('users').doc(followId).get().then(followDoc => {
+            if (followDoc.exists) {
+              const user = followDoc.data();
+              usersDiv.innerHTML += `
+                <div class="user-item" onclick="openChat('${user.uid}', '${user.displayName}')">
+                  <img src="${user.photoURL}" onerror="this.src='data:,'">
+                  <span class="user-name">${user.displayName} (@${user.username})</span>
+                  <span class="notification" id="notif-${user.uid}"></span>
+                </div>
+              `;
+            }
+          });
         });
-        if (currentReceiver) loadMessages();
+        listenForNotifications();
       }, error => {
-        console.error("Error loading users:", error);
+        console.error("Error loading following:", error);
+      });
+    }
+
+    function searchUsers() {
+      const query = document.getElementById('searchInput').value.trim().toLowerCase();
+      const searchResults = document.getElementById('searchResults');
+      searchResults.innerHTML = '';
+      
+      if (!query) return;
+      
+      db.collection('users')
+        .where('username', '>=', query)
+        .where('username', '<=', query + '\uf8ff')
+        .limit(5)
+        .get()
+        .then(snapshot => {
+          snapshot.forEach(doc => {
+            const user = doc.data();
+            if (user.uid !== currentUser.uid) {
+              searchResults.innerHTML += `
+                <div class="search-item" onclick="followUser('${user.uid}')">
+                  <img src="${user.photoURL}" onerror="this.src='data:,'">
+                  <span>${user.displayName} (@${user.username})</span>
+                  <button>Follow</button>
+                </div>
+              `;
+            }
+          });
+        }).catch(error => {
+          console.error("Error searching users:", error);
+        });
+    }
+
+    function followUser(userId) {
+      const userRef = db.collection('users').doc(currentUser.uid);
+      userRef.update({
+        following: firebase.firestore.FieldValue.arrayUnion(userId)
+      }).then(() => {
+        console.log("Followed user:", userId);
+        loadFollowing();
+        document.getElementById('searchInput').value = '';
+        document.getElementById('searchResults').innerHTML = '';
+      }).catch(error => {
+        console.error("Error following user:", error);
       });
     }
 
@@ -197,6 +212,7 @@
       console.log("Chat opened - Sender:", currentUser.uid, "Receiver:", receiverId);
       document.getElementById('userList').classList.remove('active');
       document.getElementById('chatWindow').style.display = 'flex';
+      document.getElementById('profilePage').style.display = 'none';
       loadMessages();
       const notifElement = document.getElementById(`notif-${receiverId}`);
       if (notifElement) notifElement.textContent = '';
@@ -205,7 +221,46 @@
     function showUserList() {
       document.getElementById('userList').classList.add('active');
       document.getElementById('chatWindow').style.display = 'none';
+      document.getElementById('profilePage').style.display = 'none';
       currentReceiver = null;
+    }
+
+    function showProfile() {
+      document.getElementById('userList').classList.remove('active');
+      document.getElementById('chatWindow').style.display = 'none';
+      const profilePage = document.getElementById('profilePage');
+      profilePage.style.display = 'flex';
+      
+      const userRef = db.collection('users').doc(currentUser.uid);
+      userRef.get().then(doc => {
+        const data = doc.data();
+        document.getElementById('profilePhoto').src = data.photoURL || '';
+        document.getElementById('profileName').value = data.displayName || '';
+        document.getElementById('profileUsername').value = data.username || '';
+      });
+    }
+
+    function saveProfile() {
+      const name = document.getElementById('profileName').value.trim();
+      const username = document.getElementById('profileUsername').value.trim();
+      if (!name || !username) {
+        alert("Name and username cannot be empty");
+        return;
+      }
+      
+      const userRef = db.collection('users').doc(currentUser.uid);
+      userRef.update({
+        displayName: name,
+        username: username,
+        photoURL: document.getElementById('profilePhoto').src
+      }).then(() => {
+        console.log("Profile updated");
+        document.getElementById('userName').textContent = name;
+        document.getElementById('userPhoto').src = document.getElementById('profilePhoto').src;
+        showUserList();
+      }).catch(error => {
+        console.error("Error updating profile:", error);
+      });
     }
 
     function loadMessages() {
@@ -241,6 +296,28 @@
       });
     }
 
+    function listenForNotifications() {
+      db.collectionGroup('messages')
+        .where('receiver', '==', currentUser.uid)
+        .orderBy('timestamp')
+        .onSnapshot(snapshot => {
+          snapshot.docChanges().forEach(change => {
+            if (change.type === 'added') {
+              const msg = change.doc.data();
+              const senderId = msg.sender;
+              const notifElement = document.getElementById(`notif-${senderId}`);
+              if (notifElement && senderId !== currentReceiver) {
+                const preview = msg.text.length > 20 ? msg.text.substring(0, 20) + '...' : msg.text;
+                notifElement.textContent = preview;
+                console.log(`Notification for ${senderId}: ${preview}`);
+              }
+            }
+          });
+        }, error => {
+          console.error("Error listening for notifications:", error);
+        });
+    }
+
     function sendMessage() {
       if (!currentUser || !currentReceiver) {
         alert("Please select a contact to chat with.");
@@ -258,8 +335,7 @@
       const chatId = [currentUser.uid, currentReceiver].sort().join('_');
       console.log("Sending message to chatId:", chatId);
       
-      const messageRef = db.collection(`chats/${chatId}/messages`).doc();
-      messageRef.set({
+      db.collection(`chats/${chatId}/messages`).add({
         text: text,
         type: 'text',
         sender: currentUser.uid,
@@ -269,49 +345,9 @@
         console.log("Message sent successfully");
         input.value = "";
         loadMessages();
-        sendNotification(currentReceiver, currentUser.displayName, text);
       }).catch(error => {
         console.error("Error sending message:", error);
         alert("Failed to send message: " + error.message);
-      });
-    }
-
-    function sendNotification(receiverId, senderName, messageText) {
-      console.log("Attempting to send notification to:", receiverId);
-      db.collection('users').doc(receiverId).get().then(doc => {
-        if (doc.exists && doc.data().fcmToken) {
-          const token = doc.data().fcmToken;
-          console.log("Receiver FCM token:", token);
-          fetch('https://fcm.googleapis.com/fcm/send', {
-            method: 'POST',
-            headers: {
-              'Authorization': 'key=YOUR_SERVER_KEY_HERE',
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              to: token,
-              notification: {
-                title: `New Message from ${senderName}`,
-                body: messageText
-              },
-              data: {
-                sender: currentUser.uid
-              }
-            })
-          }).then(response => {
-            if (response.ok) {
-              console.log("Notification sent successfully");
-            } else {
-              response.text().then(text => console.error("Notification failed:", text));
-            }
-          }).catch(error => {
-            console.error("Error sending notification:", error);
-          });
-        } else {
-          console.log("No FCM token found for receiver:", receiverId);
-        }
-      }).catch(error => {
-        console.error("Error fetching receiver data:", error);
       });
     }
 
