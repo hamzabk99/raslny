@@ -3,7 +3,7 @@
 <head>
   <title>Chat</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="styles.css?v=9">
+  <link rel="stylesheet" href="styles.css?v=10">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
@@ -97,18 +97,20 @@
     auth.onAuthStateChanged(user => {
       const authScreen = document.getElementById('authScreen');
       const chatApp = document.getElementById('chatApp');
+      const userList = document.getElementById('userList');
       
       if (user) {
         currentUser = user;
+        console.log("User signed in:", user.uid);
         authScreen.style.display = 'none';
         chatApp.style.display = 'flex';
+        userList.classList.add('active'); // Ensure user list is visible
         document.getElementById('userPhoto').src = user.photoURL || '';
         document.getElementById('userName').textContent = user.displayName || 'User';
-        console.log("Current user signed in:", currentUser.uid);
         checkUserExists(user);
         loadFollowing();
       } else {
-        console.log("No user signed in, showing auth screen");
+        console.log("No user signed in");
         authScreen.style.display = 'flex';
         chatApp.style.display = 'none';
       }
@@ -118,17 +120,22 @@
       const userRef = db.collection('users').doc(user.uid);
       userRef.get().then(doc => {
         if (!doc.exists) {
+          console.log("Creating new user document for:", user.uid);
           userRef.set({
             uid: user.uid,
             displayName: user.displayName,
-            username: user.email.split('@')[0], // Default username from email
+            username: user.email.split('@')[0],
             email: user.email,
             photoURL: user.photoURL,
             following: [],
             lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+          }).then(() => {
+            console.log("User document created");
           }).catch(error => {
             console.error("Error creating user:", error);
           });
+        } else {
+          console.log("User document exists:", doc.data());
         }
       }).catch(error => {
         console.error("Error checking user:", error);
@@ -136,29 +143,37 @@
     }
 
     function loadFollowing() {
+      console.log("Loading following list for:", currentUser.uid);
       const userRef = db.collection('users').doc(currentUser.uid);
       userRef.onSnapshot(doc => {
-        const following = doc.data().following || [];
-        const usersDiv = document.getElementById('users');
-        usersDiv.innerHTML = '';
-        
-        following.forEach(followId => {
-          db.collection('users').doc(followId).get().then(followDoc => {
-            if (followDoc.exists) {
-              const user = followDoc.data();
-              usersDiv.innerHTML += `
-                <div class="user-item" onclick="openChat('${user.uid}', '${user.displayName}')">
-                  <img src="${user.photoURL}" onerror="this.src='data:,'">
-                  <span class="user-name">${user.displayName} (@${user.username})</span>
-                  <span class="notification" id="notif-${user.uid}"></span>
-                </div>
-              `;
-            }
+        if (doc.exists) {
+          const following = doc.data().following || [];
+          const usersDiv = document.getElementById('users');
+          usersDiv.innerHTML = following.length ? '' : '<p>No one followed yet.</p>';
+          
+          following.forEach(followId => {
+            db.collection('users').doc(followId).get().then(followDoc => {
+              if (followDoc.exists) {
+                const user = followDoc.data();
+                usersDiv.innerHTML += `
+                  <div class="user-item" onclick="openChat('${user.uid}', '${user.displayName}')">
+                    <img src="${user.photoURL}" onerror="this.src='data:,'">
+                    <span class="user-name">${user.displayName} (@${user.username})</span>
+                    <span class="notification" id="notif-${user.uid}"></span>
+                  </div>
+                `;
+              }
+            }).catch(error => {
+              console.error("Error fetching followed user:", error);
+            });
           });
-        });
-        listenForNotifications();
+          listenForNotifications();
+        } else {
+          console.log("User document not found, retrying creation");
+          checkUserExists(currentUser);
+        }
       }, error => {
-        console.error("Error loading following:", error);
+        console.error("Error in loadFollowing snapshot:", error);
       });
     }
 
@@ -169,6 +184,7 @@
       
       if (!query) return;
       
+      console.log("Searching for username:", query);
       db.collection('users')
         .where('username', '>=', query)
         .where('username', '<=', query + '\uf8ff')
@@ -193,11 +209,12 @@
     }
 
     function followUser(userId) {
+      console.log("Following user:", userId);
       const userRef = db.collection('users').doc(currentUser.uid);
       userRef.update({
         following: firebase.firestore.FieldValue.arrayUnion(userId)
       }).then(() => {
-        console.log("Followed user:", userId);
+        console.log("Successfully followed user:", userId);
         loadFollowing();
         document.getElementById('searchInput').value = '';
         document.getElementById('searchResults').innerHTML = '';
@@ -219,6 +236,7 @@
     }
 
     function showUserList() {
+      console.log("Showing user list");
       document.getElementById('userList').classList.add('active');
       document.getElementById('chatWindow').style.display = 'none';
       document.getElementById('profilePage').style.display = 'none';
@@ -226,6 +244,7 @@
     }
 
     function showProfile() {
+      console.log("Showing profile page");
       document.getElementById('userList').classList.remove('active');
       document.getElementById('chatWindow').style.display = 'none';
       const profilePage = document.getElementById('profilePage');
@@ -237,6 +256,8 @@
         document.getElementById('profilePhoto').src = data.photoURL || '';
         document.getElementById('profileName').value = data.displayName || '';
         document.getElementById('profileUsername').value = data.username || '';
+      }).catch(error => {
+        console.error("Error loading profile:", error);
       });
     }
 
@@ -248,13 +269,14 @@
         return;
       }
       
+      console.log("Saving profile:", { name, username });
       const userRef = db.collection('users').doc(currentUser.uid);
       userRef.update({
         displayName: name,
         username: username,
         photoURL: document.getElementById('profilePhoto').src
       }).then(() => {
-        console.log("Profile updated");
+        console.log("Profile updated successfully");
         document.getElementById('userName').textContent = name;
         document.getElementById('userPhoto').src = document.getElementById('profilePhoto').src;
         showUserList();
@@ -297,6 +319,7 @@
     }
 
     function listenForNotifications() {
+      console.log("Listening for notifications");
       db.collectionGroup('messages')
         .where('receiver', '==', currentUser.uid)
         .orderBy('timestamp')
