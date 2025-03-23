@@ -398,7 +398,7 @@ button[onclick="sendMessage()"]:hover {
   color: #fff;
 }
 
-#profileName, #profileUsername {
+#profileName {
   padding: 10px;
   border: 1px solid #444;
   border-radius: 20px;
@@ -408,8 +408,14 @@ button[onclick="sendMessage()"]:hover {
   outline: none;
 }
 
-#profileName:focus, #profileUsername:focus {
+#profileName:focus {
   border-color: #1d9bf0;
+}
+
+#profileUsername {
+  color: #fff;
+  font-size: 15px;
+  text-align: center;
 }
 
 #profileContent button {

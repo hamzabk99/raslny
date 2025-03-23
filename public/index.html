@@ -3,7 +3,7 @@
 <head>
   <title>Chat</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="styles.css?v=11">
+  <link rel="stylesheet" href="styles.css?v=12">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
@@ -26,7 +26,7 @@
         <button onclick="signOut()" id="signOutBtn">Sign Out</button>
       </div>
       <div id="searchContainer">
-        <input id="searchInput" placeholder="Search by username..." oninput="searchUsers()">
+        <input id="searchInput" placeholder="Search by username (e.g., 1, 2)..." oninput="searchUsers()">
         <div id="searchResults"></div>
       </div>
       <div id="users"></div>
@@ -51,7 +51,7 @@
         <img id="profilePhoto" alt="Your photo">
         <input type="file" id="photoUpload" accept="image/*">
         <input id="profileName" placeholder="Your Name">
-        <input id="profileUsername" placeholder="Your Username">
+        <p id="profileUsername">Username: <span id="fixedUsername"></span></p>
         <button onclick="saveProfile()">Save</button>
       </div>
     </div>
@@ -124,24 +124,61 @@
       userRef.get().then(doc => {
         if (!doc.exists) {
           console.log("Creating new user document for:", user.uid);
-          userRef.set({
-            uid: user.uid,
-            displayName: user.displayName,
-            username: user.email.split('@')[0].toLowerCase(),
-            email: user.email,
-            photoURL: user.photoURL,
-            following: [],
-            lastSeen: firebase.firestore.FieldValue.serverTimestamp()
-          }).then(() => {
-            console.log("User document created");
-          }).catch(error => {
-            console.error("Error creating user:", error);
-          });
+          assignUsername(user);
         } else {
           console.log("User document exists:", doc.data());
         }
       }).catch(error => {
         console.error("Error checking user:", error);
+        resetUsernames(); // Fallback to reset if something goes wrong
+      });
+    }
+
+    function assignUsername(user) {
+      const counterRef = db.collection('metadata').doc('userCounter');
+      db.runTransaction(transaction => {
+        return transaction.get(counterRef).then(counterDoc => {
+          let nextId = 1;
+          if (counterDoc.exists) {
+            nextId = counterDoc.data().count + 1;
+          }
+          transaction.set(counterRef, { count: nextId }, { merge: true });
+          transaction.set(db.collection('users').doc(user.uid), {
+            uid: user.uid,
+            displayName: user.displayName,
+            username: nextId.toString(),
+            email: user.email,
+            photoURL: user.photoURL,
+            following: [],
+            lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          return nextId;
+        });
+      }).then(nextId => {
+        console.log("User document created with username:", nextId);
+      }).catch(error => {
+        console.error("Error assigning username:", error);
+        resetUsernames(); // Reset if transaction fails
+      });
+    }
+
+    function resetUsernames() {
+      console.log("Resetting all usernames...");
+      db.collection('users').get().then(snapshot => {
+        const batch = db.batch();
+        let counter = 1;
+        snapshot.forEach(doc => {
+          const userRef = db.collection('users').doc(doc.id);
+          batch.update(userRef, { username: counter.toString() });
+          counter++;
+        });
+        batch.set(db.collection('metadata').doc('userCounter'), { count: counter - 1 });
+        return batch.commit();
+      }).then(() => {
+        console.log("Usernames reset successfully");
+        loadFollowing();
+      }).catch(error => {
+        console.error("Error resetting usernames:", error);
       });
     }
 
@@ -185,7 +222,7 @@
     }
 
     function searchUsers() {
-      const query = document.getElementById('searchInput').value.trim().toLowerCase();
+      const query = document.getElementById('searchInput').value.trim();
       const searchResults = document.getElementById('searchResults');
       searchResults.innerHTML = '';
       
@@ -193,8 +230,7 @@
       
       console.log("Searching for username:", query);
       db.collection('users')
-        .where('username', '>=', query)
-        .where('username', '<=', query + '\uf8ff')
+        .where('username', '==', query)
         .limit(5)
         .get()
         .then(snapshot => {
@@ -266,7 +302,7 @@
         const data = doc.data();
         document.getElementById('profilePhoto').src = data.photoURL || '';
         document.getElementById('profileName').value = data.displayName || '';
-        document.getElementById('profileUsername').value = data.username || '';
+        document.getElementById('fixedUsername').textContent = data.username;
       }).catch(error => {
         console.error("Error loading profile:", error);
       });
@@ -274,28 +310,27 @@
 
     function saveProfile() {
       const name = document.getElementById('profileName').value.trim();
-      const username = document.getElementById('profileUsername').value.trim().toLowerCase();
       const file = document.getElementById('photoUpload').files[0];
       
-      if (!name || !username) {
-        alert("Name and username cannot be empty");
+      if (!name) {
+        alert("Name cannot be empty");
         return;
       }
       
-      console.log("Saving profile:", { name, username });
+      console.log("Saving profile:", { name });
       const userRef = db.collection('users').doc(currentUser.uid);
       
       if (file) {
         const storageRef = storage.ref(`profilePhotos/${currentUser.uid}`);
         storageRef.put(file).then(snapshot => {
           snapshot.ref.getDownloadURL().then(url => {
-            updateProfile(userRef, { displayName: name, username, photoURL: url });
+            updateProfile(userRef, { displayName: name, photoURL: url });
           });
         }).catch(error => {
           console.error("Error uploading photo:", error);
         });
       } else {
-        updateProfile(userRef, { displayName: name, username, photoURL: document.getElementById('profilePhoto').src });
+        updateProfile(userRef, { displayName: name, photoURL: document.getElementById('profilePhoto').src });
       }
     }
 
@@ -305,7 +340,7 @@
         document.getElementById('userName').textContent = data.displayName;
         document.getElementById('userPhoto').src = data.photoURL;
         showUserList();
-        loadFollowing(); // Refresh list to reflect changes
+        loadFollowing();
       }).catch(error => {
         console.error("Error updating profile:", error);
         alert("Failed to update profile: " + error.message);
@@ -402,6 +437,8 @@
     }
 
     console.log("App initialized");
+    // Uncomment the next line to reset usernames on load (one-time use)
+    // resetUsernames();
   </script>
 </body>
 </html>
