@@ -417,3 +417,26 @@ button[onclick="sendMessage()"]:hover {
   cursor: pointer;
   align-self: center;
 }
+
+#videoContainer {
+  position: fixed;
+  bottom: 60px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  gap: 10px;
+}
+
+#localVideo {
+  width: 150px;
+  height: 150px;
+  border-radius: 8px;
+  border: 2px solid #1d9bf0;
+}
+
+#remoteVideo {
+  width: 300px;
+  height: 225px;
+  border-radius: 8px;
+  background: #000;
+}
