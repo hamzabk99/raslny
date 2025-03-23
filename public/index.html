@@ -3,7 +3,7 @@
 <head>
   <title>Chat</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="styles.css?v=14">
+  <link rel="stylesheet" href="styles.css?v=15">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
@@ -44,6 +44,8 @@
         <button class="back-btn" onclick="showUserList()">←</button>
         <span id="currentChat">Select a contact</span>
         <button id="callBtn" style="display: none;" onclick="startCall()">Call</button>
+        <button id="editBtn" style="display: none;" onclick="editEntity()">Edit</button>
+        <button id="deleteBtn" style="display: none;" onclick="deleteEntity()">Delete</button>
         <button id="addAdminBtn" style="display: none;" onclick="addAdmin()">Add Admin</button>
       </div>
       <div id="messages"></div>
@@ -85,7 +87,7 @@
     const auth = firebase.auth();
     let currentUser = null;
     let currentReceiver = null;
-    let currentEntityType = null; // 'user', 'channel', or 'group'
+    let currentEntityType = null;
 
     function signInWithGoogle() {
       const provider = new firebase.auth.GoogleAuthProvider();
@@ -204,7 +206,7 @@
     function createGroup() {
       const counterRef = db.collection('metadata').doc('groupCounter');
       db.runTransaction(transaction => {
-        return transaction.get(counterDoc => {
+        return transaction.get(counterRef).then(counterDoc => {  // Fixed typo here
           let nextId = 1;
           if (counterDoc.exists) nextId = counterDoc.data().count + 1;
           transaction.set(counterRef, { count: nextId }, { merge: true });
@@ -230,7 +232,6 @@
       contactsDiv.innerHTML = '';
       const seenIds = new Set();
 
-      // Load followed users
       db.collection('users').doc(currentUser.uid).onSnapshot(doc => {
         const following = doc.data().following || [];
         following.forEach(followId => {
@@ -241,7 +242,6 @@
         });
       });
 
-      // Load channels and groups
       ['channels', 'groups'].forEach(collection => {
         db.collection(collection).where('members', 'array-contains', currentUser.uid)
           .onSnapshot(snapshot => {
@@ -254,7 +254,6 @@
           });
       });
 
-      // Load incoming messages from non-followed users
       db.collectionGroup('messages').where('receiver', '==', currentUser.uid)
         .orderBy('timestamp').onSnapshot(snapshot => {
           snapshot.docChanges().forEach(change => {
@@ -305,26 +304,40 @@
       
       if (!query) return;
 
-      // Search channels
+      console.log("Searching for username:", query);
+
       db.collection('channels').where('username', '==', query).get()
         .then(snapshot => {
-          snapshot.forEach(doc => handleSearchResult(doc.data(), 'channel', searchResults));
-        });
-      // Search groups
+          console.log("Channels found:", snapshot.size);
+          snapshot.forEach(doc => {
+            console.log("Channel data:", doc.data());
+            handleSearchResult(doc.data(), 'channel', searchResults);
+          });
+        }).catch(error => console.error("Error searching channels:", error));
+
       db.collection('groups').where('username', '==', query).get()
         .then(snapshot => {
-          snapshot.forEach(doc => handleSearchResult(doc.data(), 'group', searchResults));
-        });
-      // Search users
+          console.log("Groups found:", snapshot.size);
+          snapshot.forEach(doc => {
+            console.log("Group data:", doc.data());
+            handleSearchResult(doc.data(), 'group', searchResults);
+          });
+        }).catch(error => console.error("Error searching groups:", error));
+
       db.collection('users').where('username', '==', query).get()
         .then(snapshot => {
-          snapshot.forEach(doc => handleSearchResult(doc.data(), 'user', searchResults));
-        });
+          console.log("Users found:", snapshot.size);
+          snapshot.forEach(doc => {
+            console.log("User data:", doc.data());
+            handleSearchResult(doc.data(), 'user', searchResults);
+          });
+        }).catch(error => console.error("Error searching users:", error));
     }
 
     function handleSearchResult(data, type, container) {
       if (type === 'user' && data.uid === currentUser.uid) return;
       const id = type === 'user' ? data.uid : data.username;
+      console.log("Rendering:", type, id, data.displayName || data.name);
       container.innerHTML += `
         <div class="search-item" onclick="applyToJoin('${id}', '${type}')">
           <img src="${data.photoURL || 'data:,'}" onerror="this.src='data:,'">
@@ -355,24 +368,29 @@
         requestsDiv.innerHTML = '';
         snapshot.forEach(doc => {
           const request = doc.data();
-          if (request.targetType === 'user') return;
           const entityRef = db.collection(request.targetType + 's').doc(request.targetId);
           entityRef.get().then(entityDoc => {
-            if (entityDoc.exists && entityDoc.data().creator === currentUser.uid) {
-              db.collection('users').doc(request.applicant).get().then(userDoc => {
-                if (userDoc.exists) {
-                  const user = userDoc.data();
-                  requestsDiv.innerHTML += `
-                    <div class="request-item">
-                      <span>${user.displayName} (@${user.username}) wants to join ${request.targetId}</span>
-                      <button onclick="acceptRequest('${doc.id}', '${request.applicant}', '${request.targetId}', '${request.targetType}')">Accept</button>
-                      <button onclick="rejectRequest('${doc.id}')">Reject</button>
-                    </div>
-                  `;
-                }
-              });
+            if (entityDoc.exists) {
+              const entityData = entityDoc.data();
+              // Show requests if user is creator or admin (for channels)
+              const isAdmin = request.targetType === 'channel' && entityData.admins.includes(currentUser.uid);
+              const isCreator = entityData.creator === currentUser.uid;
+              if (isCreator || isAdmin) {
+                db.collection('users').doc(request.applicant).get().then(userDoc => {
+                  if (userDoc.exists) {
+                    const user = userDoc.data();
+                    requestsDiv.innerHTML += `
+                      <div class="request-item">
+                        <span>${user.displayName} (@${user.username}) wants to join ${request.targetId}</span>
+                        <button onclick="acceptRequest('${doc.id}', '${request.applicant}', '${request.targetId}', '${request.targetType}')">Accept</button>
+                        <button onclick="rejectRequest('${doc.id}')">Reject</button>
+                      </div>
+                    `;
+                  }
+                });
+              }
             }
-          });
+          }).catch(error => console.error("Error loading entity for request:", error));
         });
       });
     }
@@ -404,6 +422,8 @@
       
       const inputContainer = document.getElementById('messageInputContainer');
       const callBtn = document.getElementById('callBtn');
+      const editBtn = document.getElementById('editBtn');
+      const deleteBtn = document.getElementById('deleteBtn');
       const addAdminBtn = document.getElementById('addAdminBtn');
       
       if (type === 'channel') {
@@ -411,15 +431,24 @@
           const data = doc.data();
           inputContainer.style.display = data.admins.includes(currentUser.uid) ? 'flex' : 'none';
           addAdminBtn.style.display = data.admins.includes(currentUser.uid) ? 'inline' : 'none';
+          editBtn.style.display = data.admins.includes(currentUser.uid) ? 'inline' : 'none';
+          deleteBtn.style.display = data.creator === currentUser.uid ? 'inline' : 'none';
+          callBtn.style.display = 'none';
         });
-        callBtn.style.display = 'none';
       } else if (type === 'group') {
-        inputContainer.style.display = 'flex';
-        callBtn.style.display = 'none';
-        addAdminBtn.style.display = 'none';
+        db.collection('groups').doc(id).get().then(doc => {
+          const data = doc.data();
+          inputContainer.style.display = 'flex';
+          editBtn.style.display = data.creator === currentUser.uid ? 'inline' : 'none';
+          deleteBtn.style.display = data.creator === currentUser.uid ? 'inline' : 'none';
+          callBtn.style.display = 'none';
+          addAdminBtn.style.display = 'none';
+        });
       } else {
         inputContainer.style.display = 'flex';
         callBtn.style.display = 'inline';
+        deleteBtn.style.display = 'inline';
+        editBtn.style.display = 'none';
         addAdminBtn.style.display = 'none';
       }
       
@@ -487,9 +516,43 @@
       });
     }
 
+    function editEntity() {
+      if (currentEntityType !== 'channel' && currentEntityType !== 'group') return;
+      
+      const newName = prompt(`Enter new name for ${currentReceiver}:`);
+      if (!newName) return;
+      
+      db.collection(currentEntityType + 's').doc(currentReceiver).update({
+        name: newName
+      }).then(() => {
+        console.log(`Updated ${currentEntityType} name to: ${newName}`);
+        document.getElementById('currentChat').textContent = newName;
+        loadContacts();
+      }).catch(error => console.error("Error editing entity:", error));
+    }
+
+    function deleteEntity() {
+      if (!currentReceiver || !currentEntityType) return;
+      
+      if (!confirm(`Are you sure you want to delete ${currentReceiver}?`)) return;
+      
+      let ref;
+      if (currentEntityType === 'user') {
+        const chatId = [currentUser.uid, currentReceiver].sort().join('_');
+        ref = db.collection('chats').doc(chatId);
+      } else {
+        ref = db.collection(currentEntityType + 's').doc(currentReceiver);
+      }
+      
+      ref.delete().then(() => {
+        console.log(`Deleted ${currentEntityType}: ${currentReceiver}`);
+        showUserList();
+        loadContacts();
+      }).catch(error => console.error("Error deleting entity:", error));
+    }
+
     function startCall() {
       alert(`Simulating call to ${currentReceiver}. Real calling requires WebRTC setup.`);
-      // WebRTC implementation would go here
     }
 
     function loadMessages() {
