@@ -3,7 +3,7 @@
 <head>
   <title>Chat</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="styles.css?v=12">
+  <link rel="stylesheet" href="styles.css?v=13">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
@@ -49,7 +49,6 @@
       </div>
       <div id="profileContent">
         <img id="profilePhoto" alt="Your photo">
-        <input type="file" id="photoUpload" accept="image/*">
         <input id="profileName" placeholder="Your Name">
         <p id="profileUsername">Username: <span id="fixedUsername"></span></p>
         <button onclick="saveProfile()">Save</button>
@@ -60,7 +59,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-storage-compat.js"></script>
 
   <script>
     const firebaseConfig = {
@@ -75,7 +73,6 @@
     const app = firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
-    const storage = firebase.storage();
     let currentUser = null;
     let currentReceiver = null;
 
@@ -111,7 +108,7 @@
         document.getElementById('userPhoto').src = user.photoURL || '';
         document.getElementById('userName').textContent = user.displayName || 'User';
         checkUserExists(user);
-        loadFollowing();
+        loadContacts();
       } else {
         console.log("No user signed in");
         authScreen.style.display = 'flex';
@@ -130,7 +127,7 @@
         }
       }).catch(error => {
         console.error("Error checking user:", error);
-        resetUsernames(); // Fallback to reset if something goes wrong
+        resetUsernames();
       });
     }
 
@@ -158,7 +155,7 @@
         console.log("User document created with username:", nextId);
       }).catch(error => {
         console.error("Error assigning username:", error);
-        resetUsernames(); // Reset if transaction fails
+        resetUsernames();
       });
     }
 
@@ -176,49 +173,93 @@
         return batch.commit();
       }).then(() => {
         console.log("Usernames reset successfully");
-        loadFollowing();
+        loadContacts();
       }).catch(error => {
         console.error("Error resetting usernames:", error);
       });
     }
 
-    function loadFollowing() {
-      console.log("Loading following list for:", currentUser.uid);
+    function loadContacts() {
+      console.log("Loading contacts for:", currentUser.uid);
       const userRef = db.collection('users').doc(currentUser.uid);
+      const usersDiv = document.getElementById('users');
+      let unsubscribe = null;
+
       userRef.onSnapshot(doc => {
         if (doc.exists) {
           const following = doc.data().following || [];
-          const usersDiv = document.getElementById('users');
-          usersDiv.innerHTML = following.length ? '' : '<p>No one followed yet.</p>';
-          const seenIds = new Set();
+          usersDiv.innerHTML = '';
 
+          // Load followed users first
+          const seenIds = new Set();
           following.forEach(followId => {
-            if (!seenIds.has(followId)) {
-              seenIds.add(followId);
-              db.collection('users').doc(followId).get().then(followDoc => {
-                if (followDoc.exists) {
-                  const user = followDoc.data();
-                  usersDiv.innerHTML += `
-                    <div class="user-item" onclick="openChat('${user.uid}', '${user.displayName}')">
-                      <img src="${user.photoURL}" onerror="this.src='data:,'">
-                      <span class="user-name">${user.displayName} (@${user.username})</span>
-                      <span class="notification" id="notif-${user.uid}"></span>
-                    </div>
-                  `;
-                }
-              }).catch(error => {
-                console.error("Error fetching followed user:", error);
-              });
-            }
+            seenIds.add(followId);
+            db.collection('users').doc(followId).get().then(followDoc => {
+              if (followDoc.exists) {
+                addUserToList(followDoc.data(), usersDiv);
+              }
+            }).catch(error => {
+              console.error("Error fetching followed user:", error);
+            });
           });
-          listenForNotifications();
+
+          // Listen for incoming messages from anyone
+          if (unsubscribe) unsubscribe(); // Clean up previous listener
+          unsubscribe = db.collectionGroup('messages')
+            .where('receiver', '==', currentUser.uid)
+            .orderBy('timestamp')
+            .onSnapshot(snapshot => {
+              snapshot.docChanges().forEach(change => {
+                if (change.type === 'added') {
+                  const msg = change.doc.data();
+                  const senderId = msg.sender;
+                  if (!seenIds.has(senderId)) {
+                    seenIds.add(senderId);
+                    db.collection('users').doc(senderId).get().then(senderDoc => {
+                      if (senderDoc.exists) {
+                        addUserToList(senderDoc.data(), usersDiv);
+                        updateNotification(senderId, msg.text);
+                      }
+                    }).catch(error => {
+                      console.error("Error fetching sender:", error);
+                    });
+                  } else {
+                    updateNotification(senderId, msg.text);
+                  }
+                }
+              });
+            }, error => {
+              console.error("Error listening for messages:", error);
+            });
         } else {
           console.log("User document not found, retrying creation");
           checkUserExists(currentUser);
         }
       }, error => {
-        console.error("Error in loadFollowing snapshot:", error);
+        console.error("Error in loadContacts snapshot:", error);
       });
+    }
+
+    function addUserToList(user, usersDiv) {
+      const existingItem = document.querySelector(`.user-item[data-uid="${user.uid}"]`);
+      if (!existingItem) {
+        usersDiv.innerHTML += `
+          <div class="user-item" data-uid="${user.uid}" onclick="openChat('${user.uid}', '${user.displayName}')">
+            <img src="${user.photoURL}" onerror="this.src='data:,'">
+            <span class="user-name">${user.displayName} (@${user.username})</span>
+            <span class="notification" id="notif-${user.uid}"></span>
+          </div>
+        `;
+      }
+    }
+
+    function updateNotification(senderId, messageText) {
+      const notifElement = document.getElementById(`notif-${senderId}`);
+      if (notifElement && senderId !== currentReceiver) {
+        const preview = messageText.length > 20 ? messageText.substring(0, 20) + '...' : messageText;
+        notifElement.textContent = preview;
+        console.log(`Notification for ${senderId}: ${preview}`);
+      }
     }
 
     function searchUsers() {
@@ -262,7 +303,7 @@
         following: firebase.firestore.FieldValue.arrayUnion(userId)
       }).then(() => {
         console.log("Successfully followed user:", userId);
-        loadFollowing();
+        loadContacts();
         document.getElementById('searchInput').value = '';
         document.getElementById('searchResults').innerHTML = '';
       }).catch(error => {
@@ -310,7 +351,6 @@
 
     function saveProfile() {
       const name = document.getElementById('profileName').value.trim();
-      const file = document.getElementById('photoUpload').files[0];
       
       if (!name) {
         alert("Name cannot be empty");
@@ -319,28 +359,13 @@
       
       console.log("Saving profile:", { name });
       const userRef = db.collection('users').doc(currentUser.uid);
-      
-      if (file) {
-        const storageRef = storage.ref(`profilePhotos/${currentUser.uid}`);
-        storageRef.put(file).then(snapshot => {
-          snapshot.ref.getDownloadURL().then(url => {
-            updateProfile(userRef, { displayName: name, photoURL: url });
-          });
-        }).catch(error => {
-          console.error("Error uploading photo:", error);
-        });
-      } else {
-        updateProfile(userRef, { displayName: name, photoURL: document.getElementById('profilePhoto').src });
-      }
-    }
-
-    function updateProfile(userRef, data) {
-      userRef.update(data).then(() => {
+      userRef.update({
+        displayName: name
+      }).then(() => {
         console.log("Profile updated successfully");
-        document.getElementById('userName').textContent = data.displayName;
-        document.getElementById('userPhoto').src = data.photoURL;
+        document.getElementById('userName').textContent = name;
         showUserList();
-        loadFollowing();
+        loadContacts();
       }).catch(error => {
         console.error("Error updating profile:", error);
         alert("Failed to update profile: " + error.message);
@@ -380,29 +405,6 @@
       });
     }
 
-    function listenForNotifications() {
-      console.log("Listening for notifications");
-      db.collectionGroup('messages')
-        .where('receiver', '==', currentUser.uid)
-        .orderBy('timestamp')
-        .onSnapshot(snapshot => {
-          snapshot.docChanges().forEach(change => {
-            if (change.type === 'added') {
-              const msg = change.doc.data();
-              const senderId = msg.sender;
-              const notifElement = document.getElementById(`notif-${senderId}`);
-              if (notifElement && senderId !== currentReceiver) {
-                const preview = msg.text.length > 20 ? msg.text.substring(0, 20) + '...' : msg.text;
-                notifElement.textContent = preview;
-                console.log(`Notification for ${senderId}: ${preview}`);
-              }
-            }
-          });
-        }, error => {
-          console.error("Error listening for notifications:", error);
-        });
-    }
-
     function sendMessage() {
       if (!currentUser || !currentReceiver) {
         alert("Please select a contact to chat with.");
@@ -438,7 +440,7 @@
 
     console.log("App initialized");
     // Uncomment the next line to reset usernames on load (one-time use)
-    resetUsernames();
+    // resetUsernames();
   </script>
 </body>
 </html>
