@@ -167,6 +167,25 @@ body {
   font-size: 14px;
 }
 
+.follow-btn, .unfollow-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 16px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-left: 10px;
+}
+
+.follow-btn {
+  background: #1d9bf0;
+  color: white;
+}
+
+.unfollow-btn {
+  background: #888;
+  color: white;
+}
+
 #contacts {
   flex: 1;
   overflow-y: auto;
@@ -207,6 +226,10 @@ body {
   max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.contact-item .unfollow-btn {
+  margin-right: 10px;
 }
 
 #chatWindow {
@@ -254,7 +277,7 @@ body {
 }
 
 #videoCallBtn {
-  background: #4caf50; /* Green for video call */
+  background: #4caf50;
 }
 
 #endCallBtn {

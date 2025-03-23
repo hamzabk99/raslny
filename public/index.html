@@ -3,7 +3,7 @@
 <head>
   <title>دردشة</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="styles.css?v=18">
+  <link rel="stylesheet" href="styles.css?v=19">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
@@ -163,7 +163,7 @@
         following.forEach(followId => {
           seenIds.add(followId);
           db.collection('users').doc(followId).get().then(followDoc => {
-            if (followDoc.exists) addContact(followDoc.data(), contactsDiv);
+            if (followDoc.exists) addContact(followDoc.data(), contactsDiv, true);
           });
         });
       });
@@ -178,7 +178,7 @@
                 seenIds.add(senderId);
                 db.collection('users').doc(senderId).get().then(senderDoc => {
                   if (senderDoc.exists) {
-                    addContact(senderDoc.data(), contactsDiv);
+                    addContact(senderDoc.data(), contactsDiv, false);
                     updateNotification(senderId, msg.text);
                   }
                 });
@@ -190,7 +190,7 @@
         });
     }
 
-    function addContact(data, container) {
+    function addContact(data, container, isFollowing) {
       const id = data.uid;
       if (!document.querySelector(`.contact-item[data-id="${id}"]`)) {
         container.innerHTML += `
@@ -198,6 +198,7 @@
             <img src="${data.photoURL || 'data:,'}" onerror="this.src='data:,'">
             <span class="contact-name">${data.displayName} (@${data.username})</span>
             <span class="notification" id="notif-${id}"></span>
+            ${isFollowing ? '<button class="unfollow-btn" onclick="unfollowUser(event, \'' + id + '\')">إلغاء المتابعة</button>' : ''}
           </div>
         `;
       }
@@ -223,15 +224,50 @@
           snapshot.forEach(doc => {
             const data = doc.data();
             if (data.uid !== currentUser.uid) {
-              searchResults.innerHTML += `
-                <div class="search-item" onclick="openChat('${data.uid}', '${data.displayName}')">
-                  <img src="${data.photoURL || 'data:,'}" onerror="this.src='data:,'">
-                  <span>${data.displayName} (@${data.username})</span>
-                </div>
-              `;
+              db.collection('users').doc(currentUser.uid).get().then(userDoc => {
+                const following = userDoc.data().following || [];
+                const isFollowing = following.includes(data.uid);
+                searchResults.innerHTML += `
+                  <div class="search-item" onclick="openChat('${data.uid}', '${data.displayName}')">
+                    <img src="${data.photoURL || 'data:,'}" onerror="this.src='data:,'">
+                    <span>${data.displayName} (@${data.username})</span>
+                    <button class="${isFollowing ? 'unfollow-btn' : 'follow-btn'}" 
+                            onclick="toggleFollow(event, '${data.uid}', ${isFollowing})">
+                      ${isFollowing ? 'إلغاء المتابعة' : 'متابعة'}
+                    </button>
+                  </div>
+                `;
+              });
             }
           });
         }).catch(error => console.error("خطأ في البحث عن المستخدمين:", error));
+    }
+
+    function toggleFollow(event, userId, isFollowing) {
+      event.stopPropagation(); // Prevent opening chat when clicking follow
+      const userRef = db.collection('users').doc(currentUser.uid);
+      if (isFollowing) {
+        userRef.update({
+          following: firebase.firestore.FieldValue.arrayRemove(userId)
+        }).then(() => {
+          console.log(`تم إلغاء متابعة ${userId}`);
+          loadContacts();
+          searchEntities();
+        }).catch(error => console.error("خطأ في إلغاء المتابعة:", error));
+      } else {
+        userRef.update({
+          following: firebase.firestore.FieldValue.arrayUnion(userId)
+        }).then(() => {
+          console.log(`تم متابعة ${userId}`);
+          loadContacts();
+          searchEntities();
+        }).catch(error => console.error("خطأ في المتابعة:", error));
+      }
+    }
+
+    function unfollowUser(event, userId) {
+      event.stopPropagation();
+      toggleFollow(event, userId, true);
     }
 
     function openChat(id, name) {
@@ -367,11 +403,11 @@
     }
 
     function startVoiceCall() {
-      startCall(false); // Audio only
+      startCall(false);
     }
 
     function startVideoCall() {
-      startCall(true); // Audio + Video
+      startCall(true);
     }
 
     function setupIncomingCallListener(chatId) {
@@ -489,6 +525,7 @@
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
       }).then(() => {
         input.value = '';
+        loadContacts(); // Refresh contacts to include new chat
         loadMessages();
       }).catch(error => console.error("خطأ في إرسال الرسالة:", error));
     }
