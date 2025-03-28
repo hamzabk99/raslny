@@ -67,6 +67,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js"></script>
 
   <script>
     const firebaseConfig = {
@@ -81,6 +82,7 @@
     const app = firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const auth = firebase.auth();
+    const messaging = firebase.messaging();
     let currentUser = null;
     let currentReceiver = null;
     let localStream = null;
@@ -88,6 +90,55 @@
     const servers = {
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
     };
+
+    // Service Worker Registration
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js').then(function(registration) {
+          console.log('Service Worker registered with scope:', registration.scope);
+        }, function(error) {
+          console.log('Service Worker registration failed:', error);
+        });
+      });
+    }
+
+    // Notification Permission and Token Management
+    function requestNotificationPermission() {
+      Notification.requestPermission().then(permission => {
+        if (permission === 'granted') {
+          console.log('Notification permission granted.');
+          getToken();
+        } else {
+          console.log('Notification permission denied.');
+        }
+      });
+    }
+
+    function getToken() {
+      messaging.getToken({ vapidKey: 'YOUR_VAPID_KEY' }).then(token => {
+        if (token) {
+          console.log('FCM Token:', token);
+          saveTokenToFirestore(token);
+        } else {
+          console.log('No registration token available.');
+        }
+      }).catch(error => {
+        console.error('Error getting FCM token:', error);
+      });
+    }
+
+    function saveTokenToFirestore(token) {
+      const userRef = db.collection('users').doc(currentUser.uid);
+      userRef.update({
+        fcmToken: token
+      }).catch(error => {
+        console.error('Error saving FCM token:', error);
+      });
+    }
+
+    messaging.onTokenRefresh(() => {
+      getToken();
+    });
 
     function signInWithGoogle() {
       const provider = new firebase.auth.GoogleAuthProvider();
@@ -116,6 +167,7 @@
         document.getElementById('userName').textContent = user.displayName || 'مستخدم';
         checkUserExists(user);
         loadContacts();
+        requestNotificationPermission();
       } else {
         authScreen.style.display = 'flex';
         chatApp.style.display = 'none';
@@ -244,7 +296,7 @@
     }
 
     function toggleFollow(event, userId, isFollowing) {
-      event.stopPropagation(); // Prevent opening chat when clicking follow
+      event.stopPropagation();
       const userRef = db.collection('users').doc(currentUser.uid);
       if (isFollowing) {
         userRef.update({
@@ -525,8 +577,13 @@
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
       }).then(() => {
         input.value = '';
-        loadContacts(); // Refresh contacts to include new chat
         loadMessages();
+        // Trigger notification
+        db.collection('notifications').add({
+          recipientUid: currentReceiver,
+          message: text,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        }).catch(error => console.error("خطأ في إضافة الإشعار:", error));
       }).catch(error => console.error("خطأ في إرسال الرسالة:", error));
     }
   </script>
